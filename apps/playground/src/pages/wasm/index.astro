@@ -1,4 +1,5 @@
 ---
+import WasmShowcase from "../../components/WasmShowcase.astro";
 ---
 <html lang="en">
   <head>
@@ -6,21 +7,59 @@
     <meta name="viewport" content="width=device-width" />
     <title>WebRev WASM Lab</title>
     <style>
-      :root { color-scheme:dark; font-family:Inter,ui-sans-serif,system-ui; background:#030405; color:#f8f8f6; }
-      body { margin:0; }
-      main { width:min(900px,calc(100% - 32px)); margin:auto; padding:80px 0; }
-      .panel { border:1px solid #2a2d33; border-radius:28px; padding:28px; background:#0b0d10; }
-      code { color:#b8ffcf; }
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #030405;
+        color: #f8f8f6;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(69,86,130,.18), transparent 42%),
+          #030405;
+      }
+
+      main {
+        width: min(1180px, calc(100% - 32px));
+        margin: auto;
+        padding: 82px 0 110px;
+      }
+
+      .eyebrow {
+        letter-spacing: .2em;
+        text-transform: uppercase;
+        opacity: .6;
+        font-size: .72rem;
+      }
+
+      h1 {
+        font-size: clamp(3rem, 8vw, 7rem);
+        line-height: .94;
+        letter-spacing: -.06em;
+        margin: .2em 0;
+        max-width: 930px;
+      }
+
+      .lede {
+        max-width: 780px;
+        color: #b8bdc7;
+        line-height: 1.7;
+        font-size: 1.05rem;
+      }
     </style>
   </head>
   <body>
     <main>
-      <p>WEBREV / WASM LAB</p>
-      <h1>Heavy experiments belong behind a boundary.</h1>
-      <div class="panel">
-        <p>This route is intentionally isolated from the primary site. Future tests can detect capabilities, load revisioned WASM modules, compare configurations, report structured failures, and fall back without taking the website down.</p>
-        <code>/wasm/</code>
-      </div>
+      <div class="eyebrow">WEBREV / WASM LAB</div>
+      <h1>Throw it. Squash it. Swap the runtime.</h1>
+      <p class="lede">
+        This isolated graphics placement is intentionally simple enough to compare runtimes and expressive enough to expose real differences in input, motion, deformation, and frame behavior. It currently has a JavaScript fallback; a WASM module can take over the same placement contract later.
+      </p>
+
+      <WasmShowcase />
     </main>
   </body>
 </html>
