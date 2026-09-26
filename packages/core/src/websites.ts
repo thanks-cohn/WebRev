@@ -44,18 +44,29 @@ export function resolveCategory(
     website.categories?.includes(category)
   );
 
-  if (!match) {
-    throw new Error(`No WebRev website provides category: ${category}`);
+  if (match) return match;
+
+  if (category !== "live") {
+    return resolveCategory(config, "live");
   }
 
-  return match;
+  throw new Error(`No WebRev website provides category: ${category}`);
 }
 
 export function resolveResponsibility(
   config: WebsitesConfig,
-  responsibility: string
+  responsibility: string,
+  broadCategory = "cdn"
 ): WebsiteConfigEntry[] {
-  return Object.values(config.websites).filter((website) =>
+  const specific = Object.values(config.websites).filter((website) =>
     website.responsibilities?.includes(responsibility)
   );
+
+  if (specific.length > 0) return specific;
+
+  try {
+    return [resolveCategory(config, broadCategory)];
+  } catch {
+    return [resolveCategory(config, "live")];
+  }
 }
