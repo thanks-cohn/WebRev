@@ -33,7 +33,28 @@
       "innerRadius": 4.2,
       "defaultObjectCount": 12
     },
-    "assetNaming": "<artworkName>-<number>.glb"
+    "assetNaming": "<artworkName>-<number>.<ext>",
+    "assetDirectories": {
+      "2d": "apps/playground/src/assets/2d-assets",
+      "3d": "apps/playground/src/assets/3d-assets"
+    },
+    "billboard2d": {
+      "enabled": true,
+      "facingStrength": 0.965,
+      "maxYawDegrees": 5,
+      "maxPitchDegrees": 4,
+      "wobbleDegrees": 1.4,
+      "wobbleSpeed": 0.28,
+      "spring": 2.2,
+      "damping": 0.94
+    },
+    "motion": {
+      "floatStrength": 0.08,
+      "floatSpeed": 0.22,
+      "tossDamping": 0.992,
+      "boundaryRestitution": 0.5,
+      "maxTossSpeed": 2.6
+    }
   },
   "stations": [
     {
@@ -78,5 +99,6 @@
         "delayMs": 2200
       }
     }
-  ]
+  ],
+  "assetActions": {}
 }
