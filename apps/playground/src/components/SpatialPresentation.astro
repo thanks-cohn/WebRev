@@ -1,0 +1,468 @@
+---
+export interface Props {
+  config: {
+    title: string;
+    defaultReveal: { mode: string; delayMs: number };
+    nodes: Array<{
+      id: string;
+      artwork: {
+        label: string;
+        theme: string;
+        distance: number;
+        frame: string;
+      };
+      text: {
+        title: string;
+        body: string;
+      };
+      reveal?: {
+        mode: string;
+        delayMs: number;
+      };
+      stringPath: string;
+      decor: Array<{
+        kind: string;
+        x: number;
+        y: number;
+        z: number;
+        scale: number;
+      }>;
+    }>;
+  };
+}
+
+const { config } = Astro.props;
+---
+
+<section
+  class="presentation"
+  data-webrev-id="presentation.uniqueness-rewarded"
+  data-config={JSON.stringify(config)}
+>
+  <div class="stage" aria-label="Interactive spatial presentation">
+    <svg class="thread" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path id="presentation-thread" d="M 50 100 C 46 78, 58 67, 52 52 C 45 37, 44 18, 50 0" />
+    </svg>
+
+    <div class="scene" id="presentation-scene">
+      <div class="decor-layer" id="decor-layer" aria-hidden="true"></div>
+
+      <button class="artwork-shell" id="artwork-shell" type="button" aria-label="Reveal presentation text">
+        <div class="artwork-frame" id="artwork-frame">
+          <div class="artwork-surface" id="artwork-surface">
+            <span id="artwork-label">First Light</span>
+          </div>
+        </div>
+      </button>
+
+      <article class="caption" id="presentation-caption" aria-live="polite">
+        <h2 id="caption-title"></h2>
+        <p id="caption-body"></p>
+      </article>
+    </div>
+
+    <div class="hint" id="reveal-hint">Arrive. Wait.</div>
+
+    <div class="nav-controls">
+      <button id="previous-node" type="button" aria-label="Previous presentation">←</button>
+      <div class="counter" id="node-counter">1 / 3</div>
+      <button id="next-node" type="button" aria-label="Next presentation">→</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  const root = document.querySelector<HTMLElement>(".presentation[data-config]");
+  if (root) {
+    const parsed = JSON.parse(root.dataset.config ?? "{}");
+    const nodes = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+
+    const scene = document.getElementById("presentation-scene");
+    const shell = document.getElementById("artwork-shell");
+    const frame = document.getElementById("artwork-frame");
+    const surface = document.getElementById("artwork-surface");
+    const label = document.getElementById("artwork-label");
+    const captionTitle = document.getElementById("caption-title");
+    const captionBody = document.getElementById("caption-body");
+    const decorLayer = document.getElementById("decor-layer");
+    const thread = document.getElementById("presentation-thread");
+    const hint = document.getElementById("reveal-hint");
+    const counter = document.getElementById("node-counter");
+    const previousButton = document.getElementById("previous-node");
+    const nextButton = document.getElementById("next-node");
+
+    let index = 0;
+    let revealTimer: number | undefined;
+
+    function clearRevealTimer() {
+      if (revealTimer !== undefined) {
+        window.clearTimeout(revealTimer);
+        revealTimer = undefined;
+      }
+    }
+
+    function reveal() {
+      scene?.classList.add("revealed");
+      hint && (hint.textContent = "Revealed");
+    }
+
+    function makeDecor(item: any) {
+      const element = document.createElement("div");
+      element.className = `decor decor-${item.kind}`;
+      element.style.setProperty("--x", `${item.x}px`);
+      element.style.setProperty("--y", `${item.y}px`);
+      element.style.setProperty("--z", `${item.z}px`);
+      element.style.setProperty("--scale", String(item.scale));
+      return element;
+    }
+
+    function renderNode(nextIndex: number) {
+      if (!nodes.length) return;
+
+      clearRevealTimer();
+      index = (nextIndex + nodes.length) % nodes.length;
+      const node = nodes[index];
+      const revealConfig = node.reveal ?? parsed.defaultReveal ?? { mode: "timer", delayMs: 1800 };
+
+      scene?.classList.remove("revealed");
+      scene?.classList.add("changing");
+
+      window.setTimeout(() => scene?.classList.remove("changing"), 260);
+
+      if (surface) {
+        surface.dataset.theme = node.artwork.theme;
+      }
+
+      if (frame) {
+        frame.dataset.frame = node.artwork.frame;
+        frame.style.setProperty("--distance-scale", String(Math.max(.82, Math.min(1.16, 5 / node.artwork.distance))));
+      }
+
+      label && (label.textContent = node.artwork.label);
+      captionTitle && (captionTitle.textContent = node.text.title);
+      captionBody && (captionBody.textContent = node.text.body);
+      thread?.setAttribute("d", node.stringPath);
+
+      if (decorLayer) {
+        decorLayer.replaceChildren(...node.decor.map(makeDecor));
+      }
+
+      counter && (counter.textContent = `${index + 1} / ${nodes.length}`);
+
+      if (revealConfig.mode === "click") {
+        hint && (hint.textContent = "Click the artwork to reveal");
+      } else {
+        const delayMs = Math.max(0, Number(revealConfig.delayMs) || 0);
+        hint && (hint.textContent = `Reveals in ${(delayMs / 1000).toFixed(1)}s`);
+        revealTimer = window.setTimeout(reveal, delayMs);
+      }
+    }
+
+    function previous() {
+      renderNode(index - 1);
+    }
+
+    function next() {
+      renderNode(index + 1);
+    }
+
+    previousButton?.addEventListener("click", previous);
+    nextButton?.addEventListener("click", next);
+
+    shell?.addEventListener("click", () => {
+      const node = nodes[index];
+      const revealConfig = node?.reveal ?? parsed.defaultReveal;
+      if (revealConfig?.mode === "click") reveal();
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        previous();
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        next();
+      }
+    });
+
+    renderNode(0);
+  }
+</script>
+
+<style>
+  .presentation {
+    width: 100%;
+  }
+
+  .stage {
+    position: relative;
+    min-height: 720px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 34px;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(97,105,132,.16), transparent 34%),
+      linear-gradient(180deg, #11131a 0%, #090a0e 48%, #050506 100%);
+    perspective: 1100px;
+    isolation: isolate;
+  }
+
+  .stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 46%, transparent 35%, rgba(0,0,0,.62) 100%);
+    z-index: 8;
+  }
+
+  .thread {
+    position: absolute;
+    inset: -4% 22%;
+    width: 56%;
+    height: 108%;
+    overflow: visible;
+    z-index: 1;
+    pointer-events: none;
+    filter: drop-shadow(0 0 8px rgba(235,219,190,.2));
+  }
+
+  .thread path {
+    fill: none;
+    stroke: rgba(225,211,187,.62);
+    stroke-width: .36;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .scene {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transform-style: preserve-3d;
+    transition: opacity .25s ease, transform .5s cubic-bezier(.2,.8,.2,1);
+    z-index: 3;
+  }
+
+  .scene.changing {
+    opacity: .35;
+    transform: translateZ(-30px);
+  }
+
+  .artwork-shell {
+    position: relative;
+    z-index: 4;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    transform: translateY(24px);
+    transition: transform .8s cubic-bezier(.16,.86,.24,1);
+  }
+
+  .scene.revealed .artwork-shell {
+    transform: translateY(-58px);
+  }
+
+  .artwork-frame {
+    --distance-scale: 1;
+    width: min(44vw, 420px);
+    aspect-ratio: 4 / 5;
+    padding: 14px;
+    transform: scale(var(--distance-scale));
+    transition: transform .55s ease;
+    box-shadow: 0 34px 90px rgba(0,0,0,.48);
+  }
+
+  .artwork-frame[data-frame="thin-brass"] {
+    background: linear-gradient(135deg, #8f7b56, #3a3125 55%, #b6a171);
+  }
+
+  .artwork-frame[data-frame="dark-stone"] {
+    background: linear-gradient(135deg, #25262c, #0c0d10 55%, #4b4c54);
+  }
+
+  .artwork-frame[data-frame="soft-white"] {
+    background: linear-gradient(145deg, #ddd8cd, #79756c 58%, #f5efe2);
+  }
+
+  .artwork-surface {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: end start;
+    padding: 18px;
+    box-sizing: border-box;
+    color: rgba(255,255,255,.9);
+    font-size: .76rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+  }
+
+  .artwork-surface[data-theme="amber"] {
+    background:
+      radial-gradient(circle at 62% 32%, rgba(255,213,132,.7), transparent 18%),
+      linear-gradient(145deg, #241810, #7a4928 42%, #161115 78%);
+  }
+
+  .artwork-surface[data-theme="blue"] {
+    background:
+      radial-gradient(circle at 38% 28%, rgba(164,204,255,.6), transparent 17%),
+      linear-gradient(145deg, #0b1625, #284c78 45%, #0a0d15 78%);
+  }
+
+  .artwork-surface[data-theme="rose"] {
+    background:
+      radial-gradient(circle at 58% 34%, rgba(255,210,219,.55), transparent 16%),
+      linear-gradient(145deg, #291219, #7b394b 45%, #111014 80%);
+  }
+
+  .caption {
+    position: absolute;
+    z-index: 3;
+    top: 54%;
+    width: min(520px, calc(100% - 72px));
+    text-align: center;
+    opacity: 0;
+    transform: translateY(92px);
+    transition:
+      opacity .7s ease .08s,
+      transform .82s cubic-bezier(.18,.84,.2,1);
+    pointer-events: none;
+  }
+
+  .scene.revealed .caption {
+    opacity: 1;
+    transform: translateY(48px);
+  }
+
+  .caption h2 {
+    margin: 0 0 10px;
+    font-size: clamp(1.5rem, 3vw, 2.5rem);
+    letter-spacing: -.035em;
+  }
+
+  .caption p {
+    margin: 0 auto;
+    color: #bfc3cc;
+    max-width: 470px;
+    line-height: 1.65;
+  }
+
+  .decor-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    transform-style: preserve-3d;
+    pointer-events: none;
+  }
+
+  .decor {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform:
+      translate3d(var(--x), var(--y), var(--z))
+      scale(var(--scale));
+    opacity: .78;
+  }
+
+  .decor-orb {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 24%, #eef3ff, #737f9e 32%, #171c29 75%);
+    box-shadow: 0 18px 40px rgba(0,0,0,.35);
+  }
+
+  .decor-cube {
+    width: 78px;
+    height: 78px;
+    background: linear-gradient(135deg, #a8abb5, #343943 48%, #15171c);
+    box-shadow: 18px 22px 36px rgba(0,0,0,.35);
+    transform:
+      translate3d(var(--x), var(--y), var(--z))
+      rotateX(52deg)
+      rotateZ(34deg)
+      scale(var(--scale));
+  }
+
+  .decor-pillar {
+    width: 44px;
+    height: 150px;
+    background: linear-gradient(90deg, #24262d, #6f727d 45%, #1b1d22);
+    border-radius: 8px;
+    box-shadow: 16px 28px 42px rgba(0,0,0,.4);
+  }
+
+  .decor-ring {
+    width: 92px;
+    height: 92px;
+    border: 10px solid rgba(184,190,207,.7);
+    border-radius: 50%;
+    box-sizing: border-box;
+    transform:
+      translate3d(var(--x), var(--y), var(--z))
+      rotateX(64deg)
+      rotateY(18deg)
+      scale(var(--scale));
+  }
+
+  .hint {
+    position: absolute;
+    left: 24px;
+    bottom: 24px;
+    z-index: 10;
+    color: #9ea3ae;
+    font-size: .76rem;
+    letter-spacing: .06em;
+  }
+
+  .nav-controls {
+    position: absolute;
+    right: 24px;
+    bottom: 18px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .nav-controls button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .counter {
+    min-width: 52px;
+    text-align: center;
+    color: #aeb3bd;
+    font-size: .78rem;
+  }
+
+  @media (max-width: 760px) {
+    .stage {
+      min-height: 650px;
+    }
+
+    .artwork-frame {
+      width: min(72vw, 360px);
+    }
+
+    .decor {
+      opacity: .46;
+    }
+
+    .decor:nth-child(n+3) {
+      display: none;
+    }
+  }
+</style>

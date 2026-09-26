@@ -5,6 +5,7 @@
     "world": "world/",
     "legacyDemo": "wasm/",
     "inspection": "__webrev/revision",
-    "discovery": ".well-known/webrev.json"
+    "discovery": ".well-known/webrev.json",
+    "uniquenessRewarded": "uniqueness-rewarded/"
   }
 }
