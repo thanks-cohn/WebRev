@@ -22,13 +22,18 @@ const discovered3d = import.meta.glob("../assets/3d-assets/*.{glb,gltf}", {
 }) as Record<string, string>;
 
 const assetsByArtwork: Record<string, DiscoveredAsset[]> = {};
+const artworkNames = [...config.stations]
+  .map((station: any) => String(station.artworkName ?? ""))
+  .filter(Boolean)
+  .sort((a: string, b: string) => b.length - a.length);
 
 function registerAsset(path: string, url: string, kind: "2d" | "3d") {
   const file = path.split("/").pop() ?? "";
   const base = file.replace(/\.[^.]+$/, "");
-  const match = base.match(/^(.*?)-(\d+)$/);
-  if (!match) return;
-  const artworkName = match[1];
+  const artworkName = artworkNames.find((name: string) =>
+    base.startsWith(`${name}-`) && base.length > name.length + 1
+  );
+  if (!artworkName) return;
   (assetsByArtwork[artworkName] ??= []).push({ name: file, url, kind });
 }
 
