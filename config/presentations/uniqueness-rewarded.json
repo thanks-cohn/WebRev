@@ -1,79 +1,52 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "title": "Design it Your Way",
-  "defaultReveal": {
-    "mode": "timer",
-    "delayMs": 1800
+  "rail": {
+    "shape": "hexagonal-prism",
+    "activeFace": "top",
+    "supportedFaces": ["top", "upper-right", "lower-right", "bottom", "lower-left", "upper-left"],
+    "speed": 7.5,
+    "stationSpacing": 26,
+    "prismRadius": 3.4
   },
-  "nodes": [
+  "arrangement": {
+    "mode": "seeded-once",
+    "seed": 81723,
+    "assetDirectory": "3d assets"
+  },
+  "stations": [
     {
       "id": "first-light",
-      "artwork": {
-        "label": "First Light",
-        "theme": "amber",
-        "distance": 4.4,
-        "frame": "thin-brass"
-      },
+      "artworkName": "first-light",
+      "label": "First Light",
+      "theme": "amber",
       "text": {
         "title": "Make the space yours.",
-        "body": "Replace the artwork, move the frame, bend the thread, and change what appears around it."
+        "body": "Replace the portrait, surround it with your own objects, and let the ride carry people into the arrangement."
       },
-      "reveal": {
-        "mode": "timer",
-        "delayMs": 1600
-      },
-      "stringPath": "M 50 100 C 46 78, 58 67, 52 52 C 45 37, 44 18, 50 0",
-      "decor": [
-        { "kind": "orb", "x": -170, "y": 74, "z": -30, "scale": 0.82 },
-        { "kind": "pillar", "x": 180, "y": 118, "z": -70, "scale": 0.92 },
-        { "kind": "ring", "x": 164, "y": -64, "z": -100, "scale": 0.62 }
-      ]
+      "reveal": { "mode": "timer", "delayMs": 1700 }
     },
     {
       "id": "blue-room",
-      "artwork": {
-        "label": "Blue Room",
-        "theme": "blue",
-        "distance": 5.1,
-        "frame": "dark-stone"
-      },
+      "artworkName": "blue-room",
+      "label": "Blue Room",
+      "theme": "blue",
       "text": {
-        "title": "Arrangement is part of the work.",
-        "body": "Objects, spacing, typography, timing, and the path between pieces can all become authored material."
+        "title": "The route is part of the design.",
+        "body": "The camera rides the visible thread. Later, any face of the six-sided prism can become the route."
       },
-      "reveal": {
-        "mode": "click",
-        "delayMs": 0
-      },
-      "stringPath": "M 34 100 C 62 78, 30 67, 53 47 C 70 32, 39 18, 66 0",
-      "decor": [
-        { "kind": "cube", "x": -188, "y": 112, "z": -60, "scale": 0.84 },
-        { "kind": "orb", "x": 196, "y": 18, "z": -90, "scale": 0.58 },
-        { "kind": "pillar", "x": -155, "y": -82, "z": -110, "scale": 0.7 }
-      ]
+      "reveal": { "mode": "click", "delayMs": 0 }
     },
     {
       "id": "rose-archive",
-      "artwork": {
-        "label": "Rose Archive",
-        "theme": "rose",
-        "distance": 3.9,
-        "frame": "soft-white"
-      },
+      "artworkName": "rose-archive",
+      "label": "Rose Archive",
+      "theme": "rose",
       "text": {
         "title": "Start with a format. End somewhere personal.",
-        "body": "The default is only a starting point. Every part of the composition can be replaced, rearranged, or redesigned."
+        "body": "Change the picture, the paper, the route, the speed, the surrounding objects, or the entire arrangement."
       },
-      "reveal": {
-        "mode": "timer",
-        "delayMs": 2400
-      },
-      "stringPath": "M 56 100 C 25 82, 77 63, 49 49 C 29 36, 72 20, 42 0",
-      "decor": [
-        { "kind": "ring", "x": -185, "y": 54, "z": -70, "scale": 0.78 },
-        { "kind": "cube", "x": 182, "y": 102, "z": -45, "scale": 0.72 },
-        { "kind": "orb", "x": 126, "y": -92, "z": -110, "scale": 0.46 }
-      ]
+      "reveal": { "mode": "timer", "delayMs": 2200 }
     }
   ]
 }
