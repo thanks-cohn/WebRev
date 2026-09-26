@@ -4,7 +4,14 @@
   "rail": {
     "shape": "hexagonal-prism",
     "activeFace": "top",
-    "supportedFaces": ["top", "upper-right", "lower-right", "bottom", "lower-left", "upper-left"],
+    "supportedFaces": [
+      "top",
+      "upper-right",
+      "lower-right",
+      "bottom",
+      "lower-left",
+      "upper-left"
+    ],
     "speed": 7.5,
     "stationSpacing": 26,
     "prismRadius": 3.4
@@ -12,7 +19,15 @@
   "arrangement": {
     "mode": "seeded-once",
     "seed": 81723,
-    "assetDirectory": "3d assets"
+    "assetDirectory": "3d assets",
+    "viewportExclusion": {
+      "shape": "rectangular-prism",
+      "width": 7.2,
+      "height": 8.6,
+      "depth": 4,
+      "padding": 1.1,
+      "rule": "decor-must-remain-outside"
+    }
   },
   "stations": [
     {
@@ -24,7 +39,10 @@
         "title": "Make the space yours.",
         "body": "Replace the portrait, surround it with your own objects, and let the ride carry people into the arrangement."
       },
-      "reveal": { "mode": "timer", "delayMs": 1700 }
+      "reveal": {
+        "mode": "timer",
+        "delayMs": 1700
+      }
     },
     {
       "id": "blue-room",
@@ -35,7 +53,10 @@
         "title": "The route is part of the design.",
         "body": "The camera rides the visible thread. Later, any face of the six-sided prism can become the route."
       },
-      "reveal": { "mode": "click", "delayMs": 0 }
+      "reveal": {
+        "mode": "click",
+        "delayMs": 0
+      }
     },
     {
       "id": "rose-archive",
@@ -46,7 +67,10 @@
         "title": "Start with a format. End somewhere personal.",
         "body": "Change the picture, the paper, the route, the speed, the surrounding objects, or the entire arrangement."
       },
-      "reveal": { "mode": "timer", "delayMs": 2200 }
+      "reveal": {
+        "mode": "timer",
+        "delayMs": 2200
+      }
     }
   ]
 }
