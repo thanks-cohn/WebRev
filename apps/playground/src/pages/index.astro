@@ -27,7 +27,9 @@ const cards = [
       .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin-top:48px; }
       article { min-height:160px; padding:22px; border:1px solid rgba(255,255,255,.1); border-radius:24px; background:rgba(255,255,255,.035); backdrop-filter:blur(16px); }
       article h2 { font-size:1rem; }
-      .play { display:inline-flex; align-items:center; gap:10px; margin-top:34px; padding:14px 18px; border:1px solid rgba(255,255,255,.16); border-radius:999px; color:#fff; text-decoration:none; background:rgba(255,255,255,.05); }
+      .showcase-links { display:flex; flex-wrap:wrap; gap:12px; margin-top:34px; }
+      .play { display:inline-flex; align-items:center; gap:10px; padding:14px 18px; border:1px solid rgba(255,255,255,.16); border-radius:999px; color:#fff; text-decoration:none; background:rgba(255,255,255,.05); }
+      .play.secondary { background:rgba(255,255,255,.025); }
       a { color:#fff; }
     </style>
   </head>
@@ -37,7 +39,10 @@ const cards = [
       <h1>Build forward.<br/>Rewind safely.</h1>
       <p>WebRev is an agent-first revision layer for websites and web applications. Build something alive, inspect what is running, and keep known-good revisions within reach.</p>
 
-      <a class="play" href={href("world")}>Play The World in 3D →</a>
+      <div class="showcase-links">
+        <a class="play" href={href("world")}>Play The World in 3D →</a>
+        <a class="play secondary" href={href("uniquenessRewarded")}>Design it Your Way →</a>
+      </div>
 
       <div class="grid">
         {cards.map(([title, body]) => <article><h2>{title}</h2><p>{body}</p></article>)}
