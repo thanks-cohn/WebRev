@@ -37,6 +37,20 @@
     "assetDirectories": {
       "2d": "apps/playground/src/assets/2d-assets",
       "3d": "apps/playground/src/assets/3d-assets"
+    },
+    "billboard2d": {
+      "enabled": true,
+      "facingStrength": 0.92,
+      "maxYawDegrees": 8,
+      "maxPitchDegrees": 6,
+      "wobbleDegrees": 2.5,
+      "wobbleSpeed": 0.8,
+      "damping": 0.9
+    },
+    "motion": {
+      "floatStrength": 0.18,
+      "tossDamping": 0.985,
+      "boundaryRestitution": 0.62
     }
   },
   "stations": [
