@@ -1,23 +1,23 @@
-export type WebsiteRole = "primary" | "cdn";
-
 export interface WebsiteConfigEntry {
   origin: string;
-  responsibilities: string[];
+  categories?: string[];
+  responsibilities?: string[];
 }
 
 export interface WebsitesConfig {
   schemaVersion: number;
-  websites: Record<WebsiteRole, WebsiteConfigEntry>;
+  websites: Record<string, WebsiteConfigEntry>;
+  defaults?: Record<string, string>;
 }
 
 export function getWebsite(
   config: WebsitesConfig,
-  role: WebsiteRole
+  websiteId: string
 ): WebsiteConfigEntry {
-  const website = config.websites[role];
+  const website = config.websites[websiteId];
 
   if (!website) {
-    throw new Error(`WebRev website role not configured: ${role}`);
+    throw new Error(`WebRev website not configured: ${websiteId}`);
   }
 
   return website;
@@ -25,7 +25,37 @@ export function getWebsite(
 
 export function getWebsiteOrigin(
   config: WebsitesConfig,
-  role: WebsiteRole
+  websiteId: string
 ): string {
-  return getWebsite(config, role).origin;
+  return getWebsite(config, websiteId).origin;
+}
+
+export function resolveCategory(
+  config: WebsitesConfig,
+  category: string
+): WebsiteConfigEntry {
+  const defaultWebsiteId = config.defaults?.[category];
+
+  if (defaultWebsiteId) {
+    return getWebsite(config, defaultWebsiteId);
+  }
+
+  const match = Object.values(config.websites).find((website) =>
+    website.categories?.includes(category)
+  );
+
+  if (!match) {
+    throw new Error(`No WebRev website provides category: ${category}`);
+  }
+
+  return match;
+}
+
+export function resolveResponsibility(
+  config: WebsitesConfig,
+  responsibility: string
+): WebsiteConfigEntry[] {
+  return Object.values(config.websites).filter((website) =>
+    website.responsibilities?.includes(responsibility)
+  );
 }
