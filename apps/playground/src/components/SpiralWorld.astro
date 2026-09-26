@@ -26,9 +26,10 @@
 
   if (canvas instanceof HTMLCanvasElement) {
     const gameCanvas: HTMLCanvasElement = canvas;
-    const ctx = gameCanvas.getContext("2d");
+    const context = gameCanvas.getContext("2d");
 
-    if (ctx) {
+    if (context) {
+      const ctx: CanvasRenderingContext2D = context;
       type Vec3 = { x: number; y: number; z: number };
       type Projected = { x: number; y: number; depth: number; scale: number };
 
