@@ -243,3 +243,17 @@ Current WebRev configuration:
 These values are replaceable configuration, not framework constants.
 
 Code should depend on semantic roles such as `primary` and `cdn`, plus their declared responsibilities, so responsibilities can move between origins without broad rewrites.
+
+
+### Website responsibility model
+
+A website may belong to multiple categories and own multiple responsibilities.
+
+Do not model website roles as mutually exclusive enums.
+
+Use:
+- broad optional `categories` for common routing decisions
+- optional granular `responsibilities` for specific capabilities
+- `defaults` only to select the preferred provider for a category
+
+Do not demand maximum granularity from small projects. The schema must support both simple two-origin sites and complex multi-origin deployments without redesign.
