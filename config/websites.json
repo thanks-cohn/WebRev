@@ -1,50 +1,17 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "websites": {
-    "webrev-main": {
+    "webrev-live": {
       "origin": "https://webrev.online",
-      "categories": [
-        "landing",
-        "application",
-        "documentation",
-        "inspection",
-        "control"
-      ],
-      "responsibilities": [
-        "public-landing",
-        "application-shell",
-        "documentation",
-        "inspection-entrypoints",
-        "control-surface",
-        "lightweight-static-assets"
-      ]
+      "categories": ["live"]
     },
     "webrev-cdn": {
       "origin": "https://cdn.webrev.online",
-      "categories": [
-        "cdn",
-        "assets",
-        "distribution"
-      ],
-      "responsibilities": [
-        "revisioned-static-assets",
-        "video",
-        "wasm",
-        "models",
-        "textures",
-        "large-media",
-        "downloadable-artifacts"
-      ]
+      "categories": ["cdn"]
     }
   },
   "defaults": {
-    "landing": "webrev-main",
-    "application": "webrev-main",
-    "documentation": "webrev-main",
-    "inspection": "webrev-main",
-    "control": "webrev-main",
-    "cdn": "webrev-cdn",
-    "assets": "webrev-cdn",
-    "distribution": "webrev-cdn"
+    "live": "webrev-live",
+    "cdn": "webrev-cdn"
   }
 }
