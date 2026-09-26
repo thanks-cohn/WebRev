@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "websites": {
     "webrev-live": {
       "origin": "https://webrev.online",
@@ -13,5 +13,6 @@
   "defaults": {
     "live": "webrev-live",
     "cdn": "webrev-cdn"
-  }
+  },
+  "routes": {}
 }
