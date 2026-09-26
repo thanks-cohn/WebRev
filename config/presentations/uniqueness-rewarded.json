@@ -33,7 +33,11 @@
       "innerRadius": 4.2,
       "defaultObjectCount": 12
     },
-    "assetNaming": "<artworkName>-<number>.glb"
+    "assetNaming": "<artworkName>-<number>.<ext>",
+    "assetDirectories": {
+      "2d": "apps/playground/src/assets/2d-assets",
+      "3d": "apps/playground/src/assets/3d-assets"
+    }
   },
   "stations": [
     {
@@ -78,5 +82,6 @@
         "delayMs": 2200
       }
     }
-  ]
+  ],
+  "assetActions": {}
 }
