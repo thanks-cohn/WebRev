@@ -2,7 +2,7 @@
 export interface Props {
   config: {
     title: string;
-    defaultReveal: { mode: "timer" | "click"; delayMs: number };
+    defaultReveal: { mode: string; delayMs: number };
     nodes: Array<{
       id: string;
       artwork: {
@@ -16,7 +16,7 @@ export interface Props {
         body: string;
       };
       reveal?: {
-        mode: "timer" | "click";
+        mode: string;
         delayMs: number;
       };
       stringPath: string;
@@ -82,7 +82,6 @@ const { config } = Astro.props;
     const frame = document.getElementById("artwork-frame");
     const surface = document.getElementById("artwork-surface");
     const label = document.getElementById("artwork-label");
-    const caption = document.getElementById("presentation-caption");
     const captionTitle = document.getElementById("caption-title");
     const captionBody = document.getElementById("caption-body");
     const decorLayer = document.getElementById("decor-layer");
