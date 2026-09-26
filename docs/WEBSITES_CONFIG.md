@@ -1,52 +1,97 @@
 # Website and CDN configuration
 
-WebRev must not hardcode deployable website origins throughout source code.
+WebRev does not hardcode deployable origins throughout source code.
 
 The canonical configuration lives in:
 
 `config/websites.json`
 
-Current WebRev roles:
+## Model
 
-- `primary` — the main application/control/documentation origin
-- `cdn` — the heavy immutable asset origin
+A website entry has:
 
-Current configured values:
+- a stable website ID
+- one origin
+- zero or more broad `categories`
+- zero or more granular `responsibilities`
 
-- primary: `https://webrev.online`
-- cdn: `https://cdn.webrev.online`
+A single origin may serve many categories at once.
 
-These are configuration values, not framework constants.
+For example, one website can simultaneously be:
 
-Code should request a website by semantic role rather than repeating literal domains.
+- landing
+- application
+- documentation
+- inspection
+- control
 
-Example:
+while another may be primarily:
+
+- CDN
+- assets
+- distribution
+
+Categories are intentionally broad. Responsibilities are intentionally granular.
+
+Neither list is required to be exhaustive.
+
+WebRev should allow a project to start simple and become more granular only when the architecture needs it.
+
+## Defaults
+
+The optional `defaults` object maps a category to the preferred website ID.
+
+This lets code ask:
 
 ```ts
-const origin = getWebsiteOrigin(websites, "cdn");
+resolveCategory(websites, "landing")
+resolveCategory(websites, "cdn")
 ```
 
-This allows deployment topology to change later without requiring broad source edits.
+instead of knowing which concrete origin currently owns that job.
 
-## Responsibility-driven routing
+## Responsibilities
 
-Each website entry declares responsibilities.
+For narrower questions, code can resolve a responsibility:
 
-For example, the CDN currently owns:
+```ts
+resolveResponsibility(websites, "wasm")
+resolveResponsibility(websites, "video")
+```
 
-- WASM binaries
-- video
-- models
-- textures
-- revisioned static assets
-- large media
-- downloadable artifacts
+A responsibility may be provided by more than one website. The resolver therefore returns all matching entries.
 
-The primary origin owns:
+This is deliberate. WebRev must not assume that a responsibility has exactly one provider forever.
 
-- application shell
-- docs
-- inspection discovery
+## Granularity rule
+
+Do not require users to model every possible responsibility before they need it.
+
+A small project may declare only:
+
+```json
+{
+  "categories": ["landing", "cdn"]
+}
+```
+
+A larger project may distinguish:
+
+- public landing
 - control surface
+- documentation
+- media CDN
+- WASM CDN
+- downloads
+- inspection
+- API
+- tournament traffic
+- regional mirrors
 
-Responsibilities may be reassigned later without changing the conceptual APIs that consume them.
+The same schema should support both.
+
+## Single source of truth
+
+Concrete origins are intentionally defined only in `config/websites.json`.
+
+Documentation and application code should refer to website IDs, categories, or responsibilities rather than duplicating domain strings.
