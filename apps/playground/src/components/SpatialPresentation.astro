@@ -2,467 +2,670 @@
 export interface Props {
   config: {
     title: string;
-    defaultReveal: { mode: string; delayMs: number };
-    nodes: Array<{
+    rail: {
+      shape: string;
+      activeFace: string;
+      supportedFaces: string[];
+      speed: number;
+      stationSpacing: number;
+      prismRadius: number;
+    };
+    arrangement: {
+      mode: string;
+      seed: number;
+      assetDirectory: string;
+      assetNaming: string;
+      influenceSphere: {
+        radius: number;
+        innerRadius: number;
+        defaultObjectCount: number;
+      };
+      viewportExclusion: {
+        shape: string;
+        width: number;
+        height: number;
+        depth: number;
+        padding: number;
+        rule: string;
+      };
+    };
+    stations: Array<{
       id: string;
-      artwork: {
-        label: string;
-        theme: string;
-        distance: number;
-        frame: string;
-      };
-      text: {
-        title: string;
-        body: string;
-      };
-      reveal?: {
-        mode: string;
-        delayMs: number;
-      };
-      stringPath: string;
-      decor: Array<{
-        kind: string;
-        x: number;
-        y: number;
-        z: number;
-        scale: number;
-      }>;
+      artworkName: string;
+      label: string;
+      theme: string;
+      text: { title: string; body: string };
+      reveal: { mode: string; delayMs: number };
     }>;
   };
+  homeHref: string;
 }
 
-const { config } = Astro.props;
+const { config, homeHref } = Astro.props;
+
+const discoveredAssets = import.meta.glob("../assets/3d-assets/*.{glb,gltf}", {
+  eager: true,
+  query: "?url",
+  import: "default"
+}) as Record<string, string>;
+
+const assetsByArtwork: Record<string, Array<{ name: string; url: string }>> = {};
+
+for (const [path, url] of Object.entries(discoveredAssets)) {
+  const file = path.split("/").pop() ?? "";
+  const base = file.replace(/\.(glb|gltf)$/i, "");
+  const match = base.match(/^(.*?)-(\d+)$/);
+  if (!match) continue;
+  const artworkName = match[1];
+  (assetsByArtwork[artworkName] ??= []).push({ name: file, url });
+}
+
+const runtimeConfig = { ...config, assetsByArtwork };
 ---
 
-<section
+<div
   class="presentation"
   data-webrev-id="presentation.uniqueness-rewarded"
-  data-config={JSON.stringify(config)}
+  data-config={JSON.stringify(runtimeConfig)}
+  data-home-href={homeHref}
 >
-  <div class="stage" aria-label="Interactive spatial presentation">
-    <svg class="thread" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <path id="presentation-thread" d="M 50 100 C 46 78, 58 67, 52 52 C 45 37, 44 18, 50 0" />
-    </svg>
-
-    <div class="scene" id="presentation-scene">
-      <div class="decor-layer" id="decor-layer" aria-hidden="true"></div>
-
-      <button class="artwork-shell" id="artwork-shell" type="button" aria-label="Reveal presentation text">
-        <div class="artwork-frame" id="artwork-frame">
-          <div class="artwork-surface" id="artwork-surface">
-            <span id="artwork-label">First Light</span>
-          </div>
-        </div>
-      </button>
-
-      <article class="caption" id="presentation-caption" aria-live="polite">
-        <h2 id="caption-title"></h2>
-        <p id="caption-body"></p>
-      </article>
-    </div>
-
-    <div class="hint" id="reveal-hint">Arrive. Wait.</div>
-
-    <div class="nav-controls">
-      <button id="previous-node" type="button" aria-label="Previous presentation">←</button>
-      <div class="counter" id="node-counter">1 / 3</div>
-      <button id="next-node" type="button" aria-label="Next presentation">→</button>
-    </div>
-  </div>
-</section>
+  <canvas id="prism-rail-canvas" aria-label="Design it Your Way spatial presentation"></canvas>
+  <div class="sr-only" aria-live="polite" id="presentation-status"></div>
+</div>
 
 <script>
+  type Vec3 = { x: number; y: number; z: number };
+  type Projected = { x: number; y: number; depth: number; scale: number };
+  type ProxyObject = {
+    local: Vec3;
+    size: number;
+    shape: number;
+    spin: number;
+    assetName?: string;
+    assetUrl?: string;
+  };
+
   const root = document.querySelector<HTMLElement>(".presentation[data-config]");
-  if (root) {
-    const parsed = JSON.parse(root.dataset.config ?? "{}");
-    const nodes = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+  const canvas = document.getElementById("prism-rail-canvas");
 
-    const scene = document.getElementById("presentation-scene");
-    const shell = document.getElementById("artwork-shell");
-    const frame = document.getElementById("artwork-frame");
-    const surface = document.getElementById("artwork-surface");
-    const label = document.getElementById("artwork-label");
-    const captionTitle = document.getElementById("caption-title");
-    const captionBody = document.getElementById("caption-body");
-    const decorLayer = document.getElementById("decor-layer");
-    const thread = document.getElementById("presentation-thread");
-    const hint = document.getElementById("reveal-hint");
-    const counter = document.getElementById("node-counter");
-    const previousButton = document.getElementById("previous-node");
-    const nextButton = document.getElementById("next-node");
+  if (root && canvas instanceof HTMLCanvasElement) {
+    const gameCanvas: HTMLCanvasElement = canvas;
+    const config = JSON.parse(root.dataset.config ?? "{}");
+    const stations = Array.isArray(config.stations) ? config.stations : [];
+    const assetsByArtwork = config.assetsByArtwork ?? {};
+    const ctxMaybe = canvas.getContext("2d");
 
-    let index = 0;
-    let revealTimer: number | undefined;
+    if (ctxMaybe && stations.length) {
+      const ctx: CanvasRenderingContext2D = ctxMaybe;
+      const status = document.getElementById("presentation-status");
+      const rail = config.rail;
+      const arrangement = config.arrangement;
+      const spacing = Number(rail.stationSpacing) || 26;
+      const rideSpeed = Number(rail.speed) || 7.5;
+      const prismRadius = Number(rail.prismRadius) || 3.4;
+      const sphere = arrangement.influenceSphere;
+      const exclusion = arrangement.viewportExclusion;
 
-    function clearRevealTimer() {
-      if (revealTimer !== undefined) {
-        window.clearTimeout(revealTimer);
-        revealTimer = undefined;
+      let width = 1;
+      let height = 1;
+      let cameraZ = 9;
+      let targetZ = stationZ(0) + 8.5;
+      let stationIndex = 0;
+      let arrivingAt = 0;
+      let arrivalAt = performance.now();
+      let reveal = 0;
+      let revealRequested = false;
+      let paperFocused = false;
+      let lookYaw = 0;
+      let lookPitch = -0.02;
+      let targetYaw = 0;
+      let targetPitch = -0.02;
+      let pointerX = 0;
+      let pointerY = 0;
+      let previous = performance.now();
+      let lastPaperRect: { x: number; y: number; w: number; h: number } | null = null;
+      let lastArtworkRect: { x: number; y: number; w: number; h: number } | null = null;
+
+      const layouts = stations.map((station: any, index: number) =>
+        generateLayout(station, index)
+      );
+
+      function stationZ(index: number) {
+        return -18 - index * spacing;
       }
+
+      function hashSeed(text: string, seed: number) {
+        let h = seed | 0;
+        for (let i = 0; i < text.length; i++) {
+          h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+        }
+        return h >>> 0;
+      }
+
+      function rngFor(station: any, index: number) {
+        const randomVisit = arrangement.mode === "random-every-visit";
+        let state = randomVisit
+          ? ((Math.random() * 0xffffffff) >>> 0)
+          : hashSeed(station.artworkName ?? station.id ?? String(index), Number(arrangement.seed) || 1);
+
+        return () => {
+          state += 0x6D2B79F5;
+          let t = state;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function insideProtectedViewport(p: Vec3) {
+        const pad = Number(exclusion.padding) || 0;
+        return (
+          Math.abs(p.x) < Number(exclusion.width) * 0.5 + pad &&
+          Math.abs(p.y) < Number(exclusion.height) * 0.5 + pad &&
+          Math.abs(p.z) < Number(exclusion.depth) * 0.5 + pad
+        );
+      }
+
+      function generateLayout(station: any, index: number): ProxyObject[] {
+        const rand = rngFor(station, index);
+        const discovered = Array.isArray(assetsByArtwork[station.artworkName])
+          ? assetsByArtwork[station.artworkName]
+          : [];
+        const count = discovered.length || Number(sphere.defaultObjectCount) || 10;
+        const result: ProxyObject[] = [];
+        const outer = Number(sphere.radius) || 6;
+        const inner = Math.min(outer - 0.25, Number(sphere.innerRadius) || outer * 0.62);
+
+        for (let i = 0; i < count; i++) {
+          let point: Vec3 = { x: outer, y: 0, z: 0 };
+          let attempts = 0;
+
+          do {
+            const radius = inner + (outer - inner) * Math.cbrt(rand());
+            const theta = rand() * Math.PI * 2;
+            const cosPhi = rand() * 2 - 1;
+            const sinPhi = Math.sqrt(Math.max(0, 1 - cosPhi * cosPhi));
+
+            point = {
+              x: Math.cos(theta) * sinPhi * radius,
+              y: cosPhi * radius,
+              z: Math.sin(theta) * sinPhi * radius
+            };
+            attempts++;
+          } while (insideProtectedViewport(point) && attempts < 80);
+
+          if (insideProtectedViewport(point)) {
+            point.x = Math.sign(point.x || 1) * (Number(exclusion.width) * 0.5 + Number(exclusion.padding) + 1);
+          }
+
+          result.push({
+            local: point,
+            size: 0.38 + rand() * 0.72,
+            shape: Math.floor(rand() * 4),
+            spin: rand() * Math.PI * 2,
+            assetName: discovered[i]?.name,
+            assetUrl: discovered[i]?.url
+          });
+        }
+
+        return result;
+      }
+
+      function twistAt(z: number) {
+        return Math.sin(z * 0.035) * 0.58 + Math.sin(z * 0.013) * 0.22;
+      }
+
+      function topFacePoint(z: number): Vec3 {
+        const twist = twistAt(z);
+        return {
+          x: Math.sin(twist) * prismRadius,
+          y: Math.cos(twist) * prismRadius,
+          z
+        };
+      }
+
+      function stationCenter(index: number): Vec3 {
+        const z = stationZ(index);
+        const railPoint = topFacePoint(z);
+        return { x: railPoint.x, y: railPoint.y + 0.9, z };
+      }
+
+      function resize() {
+        const rect = gameCanvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = Math.max(1, rect.width);
+        height = Math.max(1, rect.height);
+        const pixelW = Math.floor(width * dpr);
+        const pixelH = Math.floor(height * dpr);
+
+        if (gameCanvas.width !== pixelW || gameCanvas.height !== pixelH) {
+          gameCanvas.width = pixelW;
+          gameCanvas.height = pixelH;
+        }
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function cameraPosition(): Vec3 {
+        const p = topFacePoint(cameraZ);
+        return {
+          x: p.x,
+          y: p.y + 0.35,
+          z: cameraZ
+        };
+      }
+
+      function project(point: Vec3): Projected | null {
+        const camera = cameraPosition();
+        let dx = point.x - camera.x;
+        let dy = point.y - camera.y;
+        let dz = point.z - camera.z;
+
+        const cy = Math.cos(-lookYaw);
+        const sy = Math.sin(-lookYaw);
+        const x1 = dx * cy - dz * sy;
+        const z1 = dx * sy + dz * cy;
+
+        const cp = Math.cos(-lookPitch);
+        const sp = Math.sin(-lookPitch);
+        const y2 = dy * cp - z1 * sp;
+        const z2 = dy * sp + z1 * cp;
+
+        const depth = -z2;
+        if (depth < 0.35) return null;
+
+        const focal = Math.min(width, height) * 0.92;
+        const scale = focal / depth;
+
+        return {
+          x: width * 0.5 + x1 * scale,
+          y: height * 0.5 - y2 * scale,
+          depth,
+          scale
+        };
+      }
+
+      function drawBackground() {
+        const g = ctx.createRadialGradient(
+          width * 0.5, height * 0.42, 10,
+          width * 0.5, height * 0.5, Math.max(width, height) * 0.78
+        );
+        g.addColorStop(0, "#18202b");
+        g.addColorStop(0.45, "#090d13");
+        g.addColorStop(1, "#020304");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.fillStyle = "rgba(255,255,255,.15)";
+        for (let i = 0; i < 42; i++) {
+          const x = (i * 193.1) % width;
+          const y = (i * 91.7) % height;
+          ctx.fillRect(x, y, i % 4 === 0 ? 1.5 : 1, i % 4 === 0 ? 1.5 : 1);
+        }
+      }
+
+      function drawRail() {
+        const start = Math.floor(cameraZ / 4) * 4 + 8;
+        const points: Projected[] = [];
+
+        for (let z = start; z >= cameraZ - spacing * (stations.length + 2); z -= 1.2) {
+          const p = project(topFacePoint(z));
+          if (p) points.push(p);
+        }
+
+        if (points.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+          ctx.strokeStyle = "rgba(232,218,192,.68)";
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+        }
+
+        // Sparse prism ribs make the path's six-sided construction readable.
+        for (let z = start; z >= cameraZ - spacing * (stations.length + 2); z -= 8) {
+          const twist = twistAt(z);
+          const ring: Projected[] = [];
+
+          for (let side = 0; side < 6; side++) {
+            const angle = twist + side * Math.PI / 3;
+            const p = project({
+              x: Math.sin(angle) * prismRadius,
+              y: Math.cos(angle) * prismRadius,
+              z
+            });
+            if (p) ring.push(p);
+          }
+
+          if (ring.length === 6) {
+            ctx.beginPath();
+            ctx.moveTo(ring[0].x, ring[0].y);
+            for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i].x, ring[i].y);
+            ctx.closePath();
+            ctx.strokeStyle = "rgba(180,190,205,.08)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+
+      function themeColors(theme: string) {
+        if (theme === "blue") return ["#203954", "#7ea6d7", "#0d1520"];
+        if (theme === "rose") return ["#512937", "#c77f94", "#180d13"];
+        return ["#5a3a22", "#d5a268", "#1b120c"];
+      }
+
+      function drawProxy(center: Vec3, proxy: ProxyObject, alpha: number) {
+        const world = {
+          x: center.x + proxy.local.x,
+          y: center.y + proxy.local.y,
+          z: center.z + proxy.local.z
+        };
+        const p = project(world);
+        if (!p || p.depth > 60) return;
+
+        const size = Math.max(2, proxy.size * p.scale);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(proxy.spin + performance.now() * 0.00008 * (proxy.shape % 2 ? 1 : -1));
+        ctx.globalAlpha = alpha;
+
+        if (proxy.shape === 0) {
+          const g = ctx.createRadialGradient(-size * .2, -size * .25, 0, 0, 0, size);
+          g.addColorStop(0, "#d9e4f2");
+          g.addColorStop(1, "#26303e");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (proxy.shape === 1) {
+          ctx.fillStyle = "#4d5968";
+          ctx.fillRect(-size, -size * .6, size * 2, size * 1.2);
+          ctx.strokeStyle = "rgba(255,255,255,.2)";
+          ctx.strokeRect(-size, -size * .6, size * 2, size * 1.2);
+        } else if (proxy.shape === 2) {
+          ctx.strokeStyle = "rgba(198,211,226,.72)";
+          ctx.lineWidth = Math.max(1, size * .16);
+          ctx.beginPath();
+          ctx.arc(0, 0, size, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = "#747b85";
+          ctx.beginPath();
+          ctx.moveTo(0, -size);
+          ctx.lineTo(size * .82, size * .72);
+          ctx.lineTo(-size * .82, size * .72);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function drawStation(index: number) {
+        const station = stations[index];
+        const center = stationCenter(index);
+        const centerProjected = project(center);
+        if (!centerProjected || centerProjected.depth > 54) return;
+
+        const alpha = Math.max(.12, Math.min(1, 1 - centerProjected.depth / 60));
+        const current = index === arrivingAt;
+        for (const proxy of layouts[index]) drawProxy(center, proxy, alpha * .78);
+
+        const colors = themeColors(station.theme);
+        const scale = centerProjected.scale;
+        const revealAmount = current ? reveal : 0;
+        const imageW = 5.4 * scale;
+        const imageH = 5.9 * scale;
+        const imageLift = revealAmount * 1.05 * scale;
+        const imageX = centerProjected.x - imageW * .5;
+        const imageY = centerProjected.y - imageH * .58 - imageLift;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        ctx.fillStyle = "#141414";
+        ctx.fillRect(imageX - 10, imageY - 10, imageW + 20, imageH + 20);
+        const art = ctx.createLinearGradient(imageX, imageY, imageX + imageW, imageY + imageH);
+        art.addColorStop(0, colors[0]);
+        art.addColorStop(.52, colors[1]);
+        art.addColorStop(1, colors[2]);
+        ctx.fillStyle = art;
+        ctx.fillRect(imageX, imageY, imageW, imageH);
+
+        ctx.fillStyle = "rgba(255,255,255,.86)";
+        ctx.font = `${Math.max(11, Math.min(22, scale * .24))}px ui-sans-serif, system-ui`;
+        ctx.textAlign = "left";
+        ctx.fillText(station.label, imageX + 16, imageY + imageH - 18);
+
+        const paperW = 5.0 * scale;
+        const paperH = (paperFocused && current ? 3.5 : 2.25) * scale;
+        const paperX = centerProjected.x - paperW * .5;
+        const paperRestY = centerProjected.y + imageH * .22;
+        const paperY = paperRestY + (1 - revealAmount) * 1.9 * scale;
+
+        if (revealAmount > .02) {
+          ctx.globalAlpha = alpha * revealAmount;
+          ctx.fillStyle = "#e9e3d7";
+          ctx.fillRect(paperX, paperY, paperW, paperH);
+
+          ctx.fillStyle = "#23211f";
+          ctx.textAlign = "left";
+          ctx.font = `600 ${Math.max(10, Math.min(19, scale * .21))}px ui-sans-serif, system-ui`;
+          wrapText(station.text.title, paperX + 18, paperY + 28, paperW - 36, 24);
+
+          ctx.fillStyle = "#514d48";
+          ctx.font = `${Math.max(9, Math.min(15, scale * .15))}px ui-sans-serif, system-ui`;
+          const bodyY = paperY + Math.max(58, scale * .62);
+          wrapText(station.text.body, paperX + 18, bodyY, paperW - 36, 19);
+
+          if (current) {
+            lastPaperRect = { x: paperX, y: paperY, w: paperW, h: paperH };
+          }
+        }
+
+        if (current) {
+          lastArtworkRect = { x: imageX, y: imageY, w: imageW, h: imageH };
+        }
+
+        ctx.restore();
+      }
+
+      function wrapText(text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+        const words = String(text).split(/\s+/);
+        let line = "";
+        let yy = y;
+
+        for (const word of words) {
+          const test = line ? `${line} ${word}` : word;
+          if (ctx.measureText(test).width > maxWidth && line) {
+            ctx.fillText(line, x, yy);
+            line = word;
+            yy += lineHeight;
+          } else {
+            line = test;
+          }
+        }
+        if (line) ctx.fillText(line, x, yy);
+      }
+
+      function arrived() {
+        return Math.abs(cameraZ - targetZ) < 0.08;
+      }
+
+      function requestStation(index: number) {
+        stationIndex = Math.max(0, Math.min(stations.length - 1, index));
+        arrivingAt = stationIndex;
+        targetZ = stationZ(stationIndex) + 8.5;
+        arrivalAt = performance.now();
+        reveal = 0;
+        revealRequested = false;
+        paperFocused = false;
+        lastPaperRect = null;
+        lastArtworkRect = null;
+        status && (status.textContent = `Traveling to ${stations[stationIndex].label}`);
+      }
+
+      function update(now: number, dt: number) {
+        const dz = targetZ - cameraZ;
+        if (Math.abs(dz) > 0.04) {
+          cameraZ += Math.sign(dz) * Math.min(Math.abs(dz), rideSpeed * dt);
+          arrivalAt = now;
+          reveal = 0;
+        } else {
+          cameraZ = targetZ;
+          const station = stations[arrivingAt];
+          const mode = station.reveal?.mode ?? "timer";
+          const delay = Math.max(0, Number(station.reveal?.delayMs) || 0);
+
+          if (mode === "timer" && now - arrivalAt >= delay) revealRequested = true;
+          if (revealRequested) reveal += (1 - reveal) * Math.min(1, dt * 4.8);
+        }
+
+        lookYaw += (targetYaw - lookYaw) * Math.min(1, dt * 5);
+        lookPitch += (targetPitch - lookPitch) * Math.min(1, dt * 5);
+      }
+
+      function drawHud() {
+        ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,.88)";
+        ctx.font = "600 14px ui-sans-serif, system-ui";
+        ctx.fillText("Design it Your Way", 24, 30);
+
+        ctx.fillStyle = "rgba(255,255,255,.48)";
+        ctx.font = "12px ui-sans-serif, system-ui";
+        ctx.fillText("UNIQUENESS-REWARDED · PRISM RAIL / TOP FACE", 24, 50);
+
+        const station = stations[arrivingAt];
+        const hint = arrived()
+          ? station.reveal?.mode === "click" && reveal < .2
+            ? "Click the artwork to reveal · move mouse to look · ← → ride"
+            : "Click the paper to focus · move mouse to look · ← → ride"
+          : "Riding the thread…";
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(255,255,255,.52)";
+        ctx.fillText(hint, width * .5, height - 24);
+
+        ctx.textAlign = "right";
+        ctx.fillText(`${arrivingAt + 1} / ${stations.length}`, width - 24, 30);
+        ctx.restore();
+      }
+
+      function render(now: number) {
+        resize();
+        const dt = Math.min((now - previous) / 1000, 1 / 30);
+        previous = now;
+        update(now, dt);
+
+        lastPaperRect = null;
+        lastArtworkRect = null;
+
+        drawBackground();
+        drawRail();
+
+        const drawOrder = stations
+          .map((_: any, index: number) => index)
+          .sort((a: number, b: number) => stationZ(a) - stationZ(b));
+
+        for (const index of drawOrder) drawStation(index);
+
+        const vignette = ctx.createRadialGradient(
+          width * .5, height * .5, Math.min(width, height) * .25,
+          width * .5, height * .5, Math.max(width, height) * .72
+        );
+        vignette.addColorStop(0, "rgba(0,0,0,0)");
+        vignette.addColorStop(1, "rgba(0,0,0,.6)");
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, width, height);
+
+        drawHud();
+        requestAnimationFrame(render);
+      }
+
+      function pointIn(rect: { x: number; y: number; w: number; h: number } | null, x: number, y: number) {
+        return !!rect && x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      }
+
+      gameCanvas.addEventListener("pointermove", (event) => {
+        const rect = gameCanvas.getBoundingClientRect();
+        pointerX = event.clientX - rect.left;
+        pointerY = event.clientY - rect.top;
+        const nx = pointerX / Math.max(1, rect.width) - .5;
+        const ny = pointerY / Math.max(1, rect.height) - .5;
+        targetYaw = nx * .34;
+        targetPitch = -ny * .20;
+        gameCanvas.style.cursor = pointIn(lastPaperRect, pointerX, pointerY) || pointIn(lastArtworkRect, pointerX, pointerY)
+          ? "pointer"
+          : "crosshair";
+      });
+
+      gameCanvas.addEventListener("pointerleave", () => {
+        targetYaw = 0;
+        targetPitch = -0.02;
+      });
+
+      gameCanvas.addEventListener("click", () => {
+        const station = stations[arrivingAt];
+        if (!arrived()) return;
+
+        if (pointIn(lastPaperRect, pointerX, pointerY) && reveal > .6) {
+          paperFocused = !paperFocused;
+          return;
+        }
+
+        if (pointIn(lastArtworkRect, pointerX, pointerY) && station.reveal?.mode === "click") {
+          revealRequested = true;
+        }
+      });
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          requestStation(Math.min(stations.length - 1, arrivingAt + 1));
+        }
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          requestStation(Math.max(0, arrivingAt - 1));
+        }
+        if (event.key === "Home") {
+          requestStation(0);
+        }
+      });
+
+      requestStation(0);
+      requestAnimationFrame(render);
     }
-
-    function reveal() {
-      scene?.classList.add("revealed");
-      hint && (hint.textContent = "Revealed");
-    }
-
-    function makeDecor(item: any) {
-      const element = document.createElement("div");
-      element.className = `decor decor-${item.kind}`;
-      element.style.setProperty("--x", `${item.x}px`);
-      element.style.setProperty("--y", `${item.y}px`);
-      element.style.setProperty("--z", `${item.z}px`);
-      element.style.setProperty("--scale", String(item.scale));
-      return element;
-    }
-
-    function renderNode(nextIndex: number) {
-      if (!nodes.length) return;
-
-      clearRevealTimer();
-      index = (nextIndex + nodes.length) % nodes.length;
-      const node = nodes[index];
-      const revealConfig = node.reveal ?? parsed.defaultReveal ?? { mode: "timer", delayMs: 1800 };
-
-      scene?.classList.remove("revealed");
-      scene?.classList.add("changing");
-
-      window.setTimeout(() => scene?.classList.remove("changing"), 260);
-
-      if (surface) {
-        surface.dataset.theme = node.artwork.theme;
-      }
-
-      if (frame) {
-        frame.dataset.frame = node.artwork.frame;
-        frame.style.setProperty("--distance-scale", String(Math.max(.82, Math.min(1.16, 5 / node.artwork.distance))));
-      }
-
-      label && (label.textContent = node.artwork.label);
-      captionTitle && (captionTitle.textContent = node.text.title);
-      captionBody && (captionBody.textContent = node.text.body);
-      thread?.setAttribute("d", node.stringPath);
-
-      if (decorLayer) {
-        decorLayer.replaceChildren(...node.decor.map(makeDecor));
-      }
-
-      counter && (counter.textContent = `${index + 1} / ${nodes.length}`);
-
-      if (revealConfig.mode === "click") {
-        hint && (hint.textContent = "Click the artwork to reveal");
-      } else {
-        const delayMs = Math.max(0, Number(revealConfig.delayMs) || 0);
-        hint && (hint.textContent = `Reveals in ${(delayMs / 1000).toFixed(1)}s`);
-        revealTimer = window.setTimeout(reveal, delayMs);
-      }
-    }
-
-    function previous() {
-      renderNode(index - 1);
-    }
-
-    function next() {
-      renderNode(index + 1);
-    }
-
-    previousButton?.addEventListener("click", previous);
-    nextButton?.addEventListener("click", next);
-
-    shell?.addEventListener("click", () => {
-      const node = nodes[index];
-      const revealConfig = node?.reveal ?? parsed.defaultReveal;
-      if (revealConfig?.mode === "click") reveal();
-    });
-
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        previous();
-      }
-
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        next();
-      }
-    });
-
-    renderNode(0);
   }
 </script>
 
 <style>
   .presentation {
-    width: 100%;
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+    background:#030405;
   }
 
-  .stage {
-    position: relative;
-    min-height: 720px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 34px;
-    background:
-      radial-gradient(circle at 50% 45%, rgba(97,105,132,.16), transparent 34%),
-      linear-gradient(180deg, #11131a 0%, #090a0e 48%, #050506 100%);
-    perspective: 1100px;
-    isolation: isolate;
+  canvas {
+    display:block;
+    width:100%;
+    height:100%;
+    touch-action:none;
+    cursor:crosshair;
   }
 
-  .stage::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: radial-gradient(circle at 50% 46%, transparent 35%, rgba(0,0,0,.62) 100%);
-    z-index: 8;
-  }
-
-  .thread {
-    position: absolute;
-    inset: -4% 22%;
-    width: 56%;
-    height: 108%;
-    overflow: visible;
-    z-index: 1;
-    pointer-events: none;
-    filter: drop-shadow(0 0 8px rgba(235,219,190,.2));
-  }
-
-  .thread path {
-    fill: none;
-    stroke: rgba(225,211,187,.62);
-    stroke-width: .36;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .scene {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    transform-style: preserve-3d;
-    transition: opacity .25s ease, transform .5s cubic-bezier(.2,.8,.2,1);
-    z-index: 3;
-  }
-
-  .scene.changing {
-    opacity: .35;
-    transform: translateZ(-30px);
-  }
-
-  .artwork-shell {
-    position: relative;
-    z-index: 4;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    cursor: pointer;
-    transform: translateY(24px);
-    transition: transform .8s cubic-bezier(.16,.86,.24,1);
-  }
-
-  .scene.revealed .artwork-shell {
-    transform: translateY(-58px);
-  }
-
-  .artwork-frame {
-    --distance-scale: 1;
-    width: min(44vw, 420px);
-    aspect-ratio: 4 / 5;
-    padding: 14px;
-    transform: scale(var(--distance-scale));
-    transition: transform .55s ease;
-    box-shadow: 0 34px 90px rgba(0,0,0,.48);
-  }
-
-  .artwork-frame[data-frame="thin-brass"] {
-    background: linear-gradient(135deg, #8f7b56, #3a3125 55%, #b6a171);
-  }
-
-  .artwork-frame[data-frame="dark-stone"] {
-    background: linear-gradient(135deg, #25262c, #0c0d10 55%, #4b4c54);
-  }
-
-  .artwork-frame[data-frame="soft-white"] {
-    background: linear-gradient(145deg, #ddd8cd, #79756c 58%, #f5efe2);
-  }
-
-  .artwork-surface {
-    width: 100%;
-    height: 100%;
-    display: grid;
-    place-items: end start;
-    padding: 18px;
-    box-sizing: border-box;
-    color: rgba(255,255,255,.9);
-    font-size: .76rem;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-  }
-
-  .artwork-surface[data-theme="amber"] {
-    background:
-      radial-gradient(circle at 62% 32%, rgba(255,213,132,.7), transparent 18%),
-      linear-gradient(145deg, #241810, #7a4928 42%, #161115 78%);
-  }
-
-  .artwork-surface[data-theme="blue"] {
-    background:
-      radial-gradient(circle at 38% 28%, rgba(164,204,255,.6), transparent 17%),
-      linear-gradient(145deg, #0b1625, #284c78 45%, #0a0d15 78%);
-  }
-
-  .artwork-surface[data-theme="rose"] {
-    background:
-      radial-gradient(circle at 58% 34%, rgba(255,210,219,.55), transparent 16%),
-      linear-gradient(145deg, #291219, #7b394b 45%, #111014 80%);
-  }
-
-  .caption {
-    position: absolute;
-    z-index: 3;
-    top: 54%;
-    width: min(520px, calc(100% - 72px));
-    text-align: center;
-    opacity: 0;
-    transform: translateY(92px);
-    transition:
-      opacity .7s ease .08s,
-      transform .82s cubic-bezier(.18,.84,.2,1);
-    pointer-events: none;
-  }
-
-  .scene.revealed .caption {
-    opacity: 1;
-    transform: translateY(48px);
-  }
-
-  .caption h2 {
-    margin: 0 0 10px;
-    font-size: clamp(1.5rem, 3vw, 2.5rem);
-    letter-spacing: -.035em;
-  }
-
-  .caption p {
-    margin: 0 auto;
-    color: #bfc3cc;
-    max-width: 470px;
-    line-height: 1.65;
-  }
-
-  .decor-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    transform-style: preserve-3d;
-    pointer-events: none;
-  }
-
-  .decor {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform:
-      translate3d(var(--x), var(--y), var(--z))
-      scale(var(--scale));
-    opacity: .78;
-  }
-
-  .decor-orb {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 32% 24%, #eef3ff, #737f9e 32%, #171c29 75%);
-    box-shadow: 0 18px 40px rgba(0,0,0,.35);
-  }
-
-  .decor-cube {
-    width: 78px;
-    height: 78px;
-    background: linear-gradient(135deg, #a8abb5, #343943 48%, #15171c);
-    box-shadow: 18px 22px 36px rgba(0,0,0,.35);
-    transform:
-      translate3d(var(--x), var(--y), var(--z))
-      rotateX(52deg)
-      rotateZ(34deg)
-      scale(var(--scale));
-  }
-
-  .decor-pillar {
-    width: 44px;
-    height: 150px;
-    background: linear-gradient(90deg, #24262d, #6f727d 45%, #1b1d22);
-    border-radius: 8px;
-    box-shadow: 16px 28px 42px rgba(0,0,0,.4);
-  }
-
-  .decor-ring {
-    width: 92px;
-    height: 92px;
-    border: 10px solid rgba(184,190,207,.7);
-    border-radius: 50%;
-    box-sizing: border-box;
-    transform:
-      translate3d(var(--x), var(--y), var(--z))
-      rotateX(64deg)
-      rotateY(18deg)
-      scale(var(--scale));
-  }
-
-  .hint {
-    position: absolute;
-    left: 24px;
-    bottom: 24px;
-    z-index: 10;
-    color: #9ea3ae;
-    font-size: .76rem;
-    letter-spacing: .06em;
-  }
-
-  .nav-controls {
-    position: absolute;
-    right: 24px;
-    bottom: 18px;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .nav-controls button {
-    width: 40px;
-    height: 40px;
-    border: 1px solid rgba(255,255,255,.14);
-    border-radius: 50%;
-    background: rgba(255,255,255,.05);
-    color: #fff;
-    cursor: pointer;
-    font: inherit;
-  }
-
-  .counter {
-    min-width: 52px;
-    text-align: center;
-    color: #aeb3bd;
-    font-size: .78rem;
-  }
-
-  @media (max-width: 760px) {
-    .stage {
-      min-height: 650px;
-    }
-
-    .artwork-frame {
-      width: min(72vw, 360px);
-    }
-
-    .decor {
-      opacity: .46;
-    }
-
-    .decor:nth-child(n+3) {
-      display: none;
-    }
+  .sr-only {
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
   }
 </style>
