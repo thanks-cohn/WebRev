@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "websites": {
+    "primary": {
+      "origin": "https://webrev.online",
+      "responsibilities": [
+        "application-shell",
+        "documentation",
+        "inspection-entrypoints",
+        "control-surface",
+        "lightweight-static-assets"
+      ]
+    },
+    "cdn": {
+      "origin": "https://cdn.webrev.online",
+      "responsibilities": [
+        "revisioned-static-assets",
+        "video",
+        "wasm",
+        "models",
+        "textures",
+        "large-media",
+        "downloadable-artifacts"
+      ]
+    }
+  }
+}
