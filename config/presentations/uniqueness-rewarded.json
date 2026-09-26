@@ -33,7 +33,7 @@
       "innerRadius": 4.2,
       "defaultObjectCount": 12
     },
-    "assetNaming": "<artworkName>-<number>.<ext>",
+    "assetNaming": "<artworkName>-<anything>.<ext>",
     "assetDirectories": {
       "2d": "apps/playground/src/assets/2d-assets",
       "3d": "apps/playground/src/assets/3d-assets"
