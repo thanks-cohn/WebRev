@@ -228,3 +228,18 @@ A developer should be able to hand an agent:
 - or both
 
 and the agent should be able to understand what is running, where it came from, what changed, what is unhealthy, and what safe next actions exist without blindly spelunking the codebase.
+
+
+## Website origin configuration
+
+Do not hardcode deployable website or CDN origins across source files.
+
+Use `config/websites.json` as the canonical source of truth for named website roles.
+
+Current WebRev configuration:
+- `primary` => `https://webrev.online`
+- `cdn` => `https://cdn.webrev.online`
+
+These values are replaceable configuration, not framework constants.
+
+Code should depend on semantic roles such as `primary` and `cdn`, plus their declared responsibilities, so responsibilities can move between origins without broad rewrites.
