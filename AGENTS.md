@@ -39,7 +39,7 @@ If WebRev knows which source file produced a route, which revision is live, whic
 9. Immutable artifacts should be cacheable.
 10. The debugging/control system must not depend on the thing it is trying to debug.
 11. WebRev core must not depend on AEXIS-specific concepts.
-12. WebRev core should not depend on Astro internals when a public integration or Vite hook can solve the problem.
+12. WebRev core should not depend on Astro internals when a public integration or Vite hook can solve the problem.\n13. UI navigation must resolve semantic keys from `config/links.json`; do not scatter route or external URL literals through components.
 
 ## Initial architecture
 

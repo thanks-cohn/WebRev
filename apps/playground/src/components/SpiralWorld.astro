@@ -1,0 +1,463 @@
+<section class="world-shell" data-webrev-id="world.dungeon-descent">
+  <div class="world-copy">
+    <div class="eyebrow">THE WORLD IN 3D</div>
+    <h2>Descend into the dark.</h2>
+    <p>A small atmospheric dungeon world. Keep the ball bouncing down the staircase, steer the descent, grab it, and throw it deeper.</p>
+
+    <div class="controls">
+      <div><kbd>↑ ↓ ← →</kbd><span>steer the bounce</span></div>
+      <div><kbd>Mouse</kbd> / <kbd>Touch</kbd><span>grab and toss</span></div>
+      <div><kbd>R</kbd><span>reset</span></div>
+    </div>
+  </div>
+
+  <div class="viewport">
+    <canvas id="spiral-world-canvas" width="960" height="640"></canvas>
+    <div class="hud">
+      <span id="height-label">depth 0</span>
+      <span>keep descending</span>
+    </div>
+  </div>
+</section>
+
+<script>
+  const canvas = document.getElementById("spiral-world-canvas");
+  const heightLabel = document.getElementById("height-label");
+
+  if (canvas instanceof HTMLCanvasElement) {
+    const gameCanvas: HTMLCanvasElement = canvas;
+    const context = gameCanvas.getContext("2d");
+
+    if (context) {
+      const ctx: CanvasRenderingContext2D = context;
+      type Vec3 = { x: number; y: number; z: number };
+      type Projected = { x: number; y: number; depth: number; scale: number };
+
+      const keys = new Set<string>();
+
+      const stepRise = 0.62;
+      const stepRun = 1.18;
+      const corridorHalfWidth = 3.15;
+      const stairHalfWidth = 2.35;
+      const wallHeight = 3.1;
+      const ballRadius = 0.42;
+
+      const gravity = -15;
+      const bounceSpeed = 7.4;
+      const steerAcceleration = 8.4;
+      const drag = 0.986;
+
+      let ball: Vec3 = { x: 0, y: 1.2, z: 0 };
+      let velocity: Vec3 = { x: 0, y: 0, z: -1.1 };
+      let cameraY = 0;
+      let cameraZ = 7.4;
+      let impact = 0;
+      let dragging = false;
+      let pointerLastX = 0;
+      let pointerLastY = 0;
+      let pointerLastTime = performance.now();
+      let throwVx = 0;
+      let throwVy = 0;
+      let previous = performance.now();
+
+      function clamp(value: number, min: number, max: number) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function stepCenter(index: number): Vec3 {
+        const bend = Math.sin(index * 0.12) * 0.42;
+        return {
+          x: bend,
+          y: -index * stepRise,
+          z: -index * stepRun
+        };
+      }
+
+      function reset() {
+        ball = { x: 0, y: 1.25, z: 0 };
+        velocity = { x: 0, y: 0, z: -1.2 };
+        cameraY = 0;
+        cameraZ = 7.4;
+        impact = 0;
+        dragging = false;
+      }
+
+      function resizeForDpr() {
+        const rect = gameCanvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = Math.max(1, Math.floor(rect.width * dpr));
+        const height = Math.max(1, Math.floor(rect.height * dpr));
+
+        if (gameCanvas.width !== width || gameCanvas.height !== height) {
+          gameCanvas.width = width;
+          gameCanvas.height = height;
+        }
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { width: rect.width, height: rect.height };
+      }
+
+      function project(point: Vec3, width: number, height: number): Projected | null {
+        const camera = {
+          x: 0,
+          y: cameraY + 2.5,
+          z: cameraZ
+        };
+
+        const dx = point.x - camera.x;
+        const dy = point.y - camera.y;
+        const dz = point.z - camera.z;
+
+        const pitch = -0.19;
+        const cp = Math.cos(pitch);
+        const sp = Math.sin(pitch);
+
+        const ry = dy * cp - dz * sp;
+        const rz = dy * sp + dz * cp;
+
+        const depth = -rz;
+        if (depth <= 0.35) return null;
+
+        const focal = Math.min(width, height) * 1.08;
+        const scale = focal / depth;
+
+        return {
+          x: width / 2 + dx * scale,
+          y: height * 0.43 - ry * scale,
+          depth,
+          scale
+        };
+      }
+
+      function drawQuad(points: Vec3[], width: number, height: number, fill: string, stroke: string) {
+        const projected = points
+          .map((point) => project(point, width, height))
+          .filter((value): value is Projected => value !== null);
+
+        if (projected.length !== 4) return;
+
+        ctx.beginPath();
+        ctx.moveTo(projected[0].x, projected[0].y);
+        for (let i = 1; i < projected.length; i++) {
+          ctx.lineTo(projected[i].x, projected[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      function pointerPosition(event: PointerEvent) {
+        const rect = gameCanvas.getBoundingClientRect();
+        return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      }
+
+      function projectedBall(width: number, height: number) {
+        return project(ball, width, height);
+      }
+
+      gameCanvas.addEventListener("pointerdown", (event) => {
+        const rect = gameCanvas.getBoundingClientRect();
+        const projected = projectedBall(rect.width, rect.height);
+        if (!projected) return;
+
+        const p = pointerPosition(event);
+        const radius = Math.max(18, ballRadius * projected.scale);
+
+        if (Math.hypot(p.x - projected.x, p.y - projected.y) <= radius * 1.3) {
+          dragging = true;
+          gameCanvas.setPointerCapture(event.pointerId);
+          pointerLastX = p.x;
+          pointerLastY = p.y;
+          pointerLastTime = performance.now();
+          throwVx = 0;
+          throwVy = 0;
+          velocity = { x: 0, y: 0, z: 0 };
+        }
+      });
+
+      gameCanvas.addEventListener("pointermove", (event) => {
+        if (!dragging) return;
+
+        const p = pointerPosition(event);
+        const now = performance.now();
+        const dt = Math.max((now - pointerLastTime) / 1000, 0.001);
+        const dx = p.x - pointerLastX;
+        const dy = p.y - pointerLastY;
+
+        throwVx = clamp(dx / dt, -1800, 1800);
+        throwVy = clamp(dy / dt, -1800, 1800);
+
+        ball.x += dx * 0.011;
+        ball.y -= dy * 0.011;
+
+        pointerLastX = p.x;
+        pointerLastY = p.y;
+        pointerLastTime = now;
+      });
+
+      function releasePointer(event: PointerEvent) {
+        if (!dragging) return;
+        dragging = false;
+
+        velocity.x = throwVx * 0.006;
+        velocity.y = -throwVy * 0.008;
+        velocity.z = -Math.max(1.4, Math.abs(throwVy) * 0.002);
+
+        if (gameCanvas.hasPointerCapture(event.pointerId)) {
+          gameCanvas.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      gameCanvas.addEventListener("pointerup", releasePointer);
+      gameCanvas.addEventListener("pointercancel", releasePointer);
+
+      window.addEventListener("keydown", (event) => {
+        const key = event.key.toLowerCase();
+
+        if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+          event.preventDefault();
+          keys.add(key);
+        }
+
+        if (key === "r") reset();
+      });
+
+      window.addEventListener("keyup", (event) => {
+        keys.delete(event.key.toLowerCase());
+      });
+
+      function collideWithSteps(previousY: number) {
+        if (velocity.y > 0) return;
+
+        const approx = Math.max(0, Math.round(-ball.z / stepRun));
+
+        for (let i = approx - 2; i <= approx + 3; i++) {
+          if (i < 0) continue;
+
+          const center = stepCenter(i);
+          const landingY = center.y + ballRadius;
+
+          if (!(previousY >= landingY && ball.y <= landingY)) continue;
+          if (Math.abs(ball.z - center.z) > stepRun * 0.68) continue;
+          if (Math.abs(ball.x - center.x) > stairHalfWidth - ballRadius * 0.55) continue;
+
+          ball.y = landingY;
+          ball.z = Math.min(ball.z, center.z + stepRun * 0.18);
+          velocity.y = bounceSpeed + Math.min(Math.abs(velocity.y) * 0.16, 2.2);
+          velocity.z -= 0.55;
+          impact = clamp(Math.abs(velocity.y) / 10, 0.22, 1);
+          return;
+        }
+      }
+
+      function update(dt: number) {
+        if (!dragging) {
+          let ax = 0;
+          let az = -1.45;
+
+          if (keys.has("arrowleft")) ax -= steerAcceleration;
+          if (keys.has("arrowright")) ax += steerAcceleration;
+          if (keys.has("arrowup")) az -= steerAcceleration * 0.72;
+          if (keys.has("arrowdown")) az += steerAcceleration * 0.58;
+
+          velocity.x += ax * dt;
+          velocity.z += az * dt;
+          velocity.y += gravity * dt;
+
+          velocity.x *= Math.pow(drag, dt * 60);
+          velocity.z *= Math.pow(drag, dt * 60);
+
+          const previousY = ball.y;
+
+          ball.x += velocity.x * dt;
+          ball.y += velocity.y * dt;
+          ball.z += velocity.z * dt;
+
+          ball.x = clamp(ball.x, -corridorHalfWidth + ballRadius, corridorHalfWidth - ballRadius);
+
+          collideWithSteps(previousY);
+        }
+
+        cameraY += (ball.y - cameraY) * Math.min(1, dt * 2.65);
+        cameraZ += ((ball.z + 8.4) - cameraZ) * Math.min(1, dt * 2.35);
+        impact *= Math.pow(0.04, dt);
+      }
+
+      function drawTorch(x: number, y: number, z: number, width: number, height: number) {
+        const p = project({ x, y, z }, width, height);
+        if (!p) return;
+
+        const radius = clamp(0.22 * p.scale, 5, 20);
+        const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 6.2);
+        halo.addColorStop(0, "rgba(255,218,145,.48)");
+        halo.addColorStop(0.28, "rgba(255,143,64,.20)");
+        halo.addColorStop(1, "rgba(255,110,35,0)");
+
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius * 6.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffd98c";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function draw(now: number) {
+        const dt = Math.min((now - previous) / 1000, 1 / 30);
+        previous = now;
+        update(dt);
+
+        const { width, height } = resizeForDpr();
+
+        const bg = ctx.createLinearGradient(0, 0, 0, height);
+        bg.addColorStop(0, "#111117");
+        bg.addColorStop(0.42, "#09090c");
+        bg.addColorStop(1, "#020203");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+
+        const approxIndex = Math.max(0, Math.round(-ball.z / stepRun));
+
+        for (let i = approxIndex + 42; i >= Math.max(0, approxIndex - 6); i--) {
+          const center = stepCenter(i);
+          const next = stepCenter(i + 1);
+
+          const x0 = center.x - stairHalfWidth;
+          const x1 = center.x + stairHalfWidth;
+          const z0 = center.z + stepRun * 0.48;
+          const z1 = next.z + stepRun * 0.48;
+
+          drawQuad(
+            [
+              { x: x0, y: center.y, z: z0 },
+              { x: x1, y: center.y, z: z0 },
+              { x: x1, y: center.y, z: z1 },
+              { x: x0, y: center.y, z: z1 }
+            ],
+            width,
+            height,
+            i % 2 === 0 ? "rgba(68,66,72,.92)" : "rgba(58,56,62,.92)",
+            "rgba(190,185,195,.12)"
+          );
+
+          const wallTop = center.y + wallHeight;
+
+          drawQuad(
+            [
+              { x: -corridorHalfWidth, y: center.y - stepRise, z: z0 },
+              { x: -corridorHalfWidth, y: wallTop, z: z0 },
+              { x: -corridorHalfWidth, y: wallTop, z: z1 },
+              { x: -corridorHalfWidth, y: center.y - stepRise, z: z1 }
+            ],
+            width,
+            height,
+            "rgba(32,31,36,.96)",
+            "rgba(170,165,180,.08)"
+          );
+
+          drawQuad(
+            [
+              { x: corridorHalfWidth, y: center.y - stepRise, z: z1 },
+              { x: corridorHalfWidth, y: wallTop, z: z1 },
+              { x: corridorHalfWidth, y: wallTop, z: z0 },
+              { x: corridorHalfWidth, y: center.y - stepRise, z: z0 }
+            ],
+            width,
+            height,
+            "rgba(27,26,31,.96)",
+            "rgba(170,165,180,.08)"
+          );
+
+          if (i % 4 === 0) {
+            drawTorch(-corridorHalfWidth + 0.02, center.y + 1.48, center.z, width, height);
+          }
+
+          if (i % 4 === 2) {
+            drawTorch(corridorHalfWidth - 0.02, center.y + 1.48, center.z, width, height);
+          }
+        }
+
+        const pBall = projectedBall(width, height);
+
+        if (pBall) {
+          const speed = Math.hypot(velocity.x, velocity.y, velocity.z);
+          const stretch = clamp(speed / 13, 0, 0.34);
+          const squash = impact * 0.34;
+          const scaleX = 1 + squash - stretch * 0.12;
+          const scaleY = 1 - squash + stretch * 0.32;
+          const radius = clamp(ballRadius * pBall.scale, 10, 78);
+
+          ctx.save();
+          ctx.translate(pBall.x, pBall.y);
+          ctx.scale(scaleX, scaleY);
+
+          const ballGlow = ctx.createRadialGradient(-radius * 0.28, -radius * 0.32, radius * 0.12, 0, 0, radius);
+          ballGlow.addColorStop(0, "#ffffff");
+          ballGlow.addColorStop(0.18, "#e5f0ff");
+          ballGlow.addColorStop(0.5, "#7ba9ff");
+          ballGlow.addColorStop(1, "#1a2a4d");
+
+          ctx.fillStyle = ballGlow;
+          ctx.beginPath();
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = dragging ? "rgba(255,255,255,.82)" : "rgba(255,255,255,.24)";
+          ctx.lineWidth = dragging ? 2 : 1;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const vignette = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.22, width / 2, height / 2, Math.max(width, height) * 0.72);
+        vignette.addColorStop(0, "rgba(0,0,0,0)");
+        vignette.addColorStop(1, "rgba(0,0,0,.62)");
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, width, height);
+
+        if (heightLabel) {
+          heightLabel.textContent = `depth ${Math.max(0, Math.round(-ball.y * 10) / 10)}`;
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      reset();
+      requestAnimationFrame(draw);
+    }
+  }
+</script>
+
+<style>
+  .world-shell {
+    display:grid;
+    grid-template-columns:minmax(220px,.62fr) minmax(0,1.8fr);
+    gap:28px;
+    align-items:stretch;
+  }
+  .world-copy,.viewport {
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:28px;
+    background:rgba(255,255,255,.035);
+    backdrop-filter:blur(16px);
+  }
+  .world-copy { padding:26px; }
+  .eyebrow { font-size:.72rem; letter-spacing:.2em; opacity:.58; }
+  h2 { font-size:clamp(2rem,4vw,3.6rem); margin:.35em 0 .25em; letter-spacing:-.045em; }
+  p { color:#b8bdc7; line-height:1.65; }
+  .controls { display:grid; gap:10px; margin-top:24px; }
+  .controls div { display:grid; grid-template-columns:minmax(110px,auto) 1fr; gap:10px; align-items:center; color:#aeb6c5; font-size:.82rem; }
+  kbd { border:1px solid rgba(255,255,255,.15); border-bottom-color:rgba(255,255,255,.3); background:rgba(255,255,255,.06); border-radius:7px; padding:3px 6px; font:inherit; color:#f5f7fb; }
+  .viewport { position:relative; min-height:560px; overflow:hidden; touch-action:none; cursor:grab; }
+  .viewport:active { cursor:grabbing; }
+  canvas { display:block; width:100%; height:100%; min-height:560px; }
+  .hud { position:absolute; left:18px; right:18px; bottom:16px; display:flex; justify-content:space-between; gap:12px; color:#aeb6c5; font-size:.76rem; pointer-events:none; }
+  @media (max-width:800px) {
+    .world-shell { grid-template-columns:1fr; }
+    .viewport,canvas { min-height:460px; }
+  }
+</style>
