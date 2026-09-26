@@ -40,17 +40,20 @@
     },
     "billboard2d": {
       "enabled": true,
-      "facingStrength": 0.92,
-      "maxYawDegrees": 8,
-      "maxPitchDegrees": 6,
-      "wobbleDegrees": 2.5,
-      "wobbleSpeed": 0.8,
-      "damping": 0.9
+      "facingStrength": 0.965,
+      "maxYawDegrees": 5,
+      "maxPitchDegrees": 4,
+      "wobbleDegrees": 1.4,
+      "wobbleSpeed": 0.28,
+      "spring": 2.2,
+      "damping": 0.94
     },
     "motion": {
-      "floatStrength": 0.18,
-      "tossDamping": 0.985,
-      "boundaryRestitution": 0.62
+      "floatStrength": 0.08,
+      "floatSpeed": 0.22,
+      "tossDamping": 0.992,
+      "boundaryRestitution": 0.5,
+      "maxTossSpeed": 2.6
     }
   },
   "stations": [
