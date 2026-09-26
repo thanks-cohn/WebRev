@@ -38,3 +38,5 @@ export interface MediaPanel {
   href?: string;
   load?: "eager" | "visible" | "interaction";
 }
+
+export * from "./websites";
