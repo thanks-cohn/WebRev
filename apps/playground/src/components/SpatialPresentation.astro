@@ -89,6 +89,7 @@ const runtimeConfig = { ...config, assetsByArtwork };
   const canvas = document.getElementById("prism-rail-canvas");
 
   if (root && canvas instanceof HTMLCanvasElement) {
+    const gameCanvas: HTMLCanvasElement = canvas;
     const config = JSON.parse(root.dataset.config ?? "{}");
     const stations = Array.isArray(config.stations) ? config.stations : [];
     const assetsByArtwork = config.assetsByArtwork ?? {};
@@ -230,16 +231,16 @@ const runtimeConfig = { ...config, assetsByArtwork };
       }
 
       function resize() {
-        const rect = canvas.getBoundingClientRect();
+        const rect = gameCanvas.getBoundingClientRect();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         width = Math.max(1, rect.width);
         height = Math.max(1, rect.height);
         const pixelW = Math.floor(width * dpr);
         const pixelH = Math.floor(height * dpr);
 
-        if (canvas.width !== pixelW || canvas.height !== pixelH) {
-          canvas.width = pixelW;
-          canvas.height = pixelH;
+        if (gameCanvas.width !== pixelW || gameCanvas.height !== pixelH) {
+          gameCanvas.width = pixelW;
+          gameCanvas.height = pixelH;
         }
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -401,7 +402,7 @@ const runtimeConfig = { ...config, assetsByArtwork };
         ctx.restore();
       }
 
-      function drawStation(index: number, now: number) {
+      function drawStation(index: number) {
         const station = stations[index];
         const center = stationCenter(index);
         const centerProjected = project(center);
@@ -567,7 +568,7 @@ const runtimeConfig = { ...config, assetsByArtwork };
           .map((_: any, index: number) => index)
           .sort((a: number, b: number) => stationZ(a) - stationZ(b));
 
-        for (const index of drawOrder) drawStation(index, now);
+        for (const index of drawOrder) drawStation(index);
 
         const vignette = ctx.createRadialGradient(
           width * .5, height * .5, Math.min(width, height) * .25,
@@ -586,25 +587,25 @@ const runtimeConfig = { ...config, assetsByArtwork };
         return !!rect && x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
       }
 
-      canvas.addEventListener("pointermove", (event) => {
-        const rect = canvas.getBoundingClientRect();
+      gameCanvas.addEventListener("pointermove", (event) => {
+        const rect = gameCanvas.getBoundingClientRect();
         pointerX = event.clientX - rect.left;
         pointerY = event.clientY - rect.top;
         const nx = pointerX / Math.max(1, rect.width) - .5;
         const ny = pointerY / Math.max(1, rect.height) - .5;
         targetYaw = nx * .34;
         targetPitch = -ny * .20;
-        canvas.style.cursor = pointIn(lastPaperRect, pointerX, pointerY) || pointIn(lastArtworkRect, pointerX, pointerY)
+        gameCanvas.style.cursor = pointIn(lastPaperRect, pointerX, pointerY) || pointIn(lastArtworkRect, pointerX, pointerY)
           ? "pointer"
           : "crosshair";
       });
 
-      canvas.addEventListener("pointerleave", () => {
+      gameCanvas.addEventListener("pointerleave", () => {
         targetYaw = 0;
         targetPitch = -0.02;
       });
 
-      canvas.addEventListener("click", () => {
+      gameCanvas.addEventListener("click", () => {
         const station = stations[arrivingAt];
         if (!arrived()) return;
 
