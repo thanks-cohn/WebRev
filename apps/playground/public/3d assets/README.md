@@ -1,32 +1,34 @@
 # 3d assets
 
-Drop optional scene assets here.
+This directory is the drop zone for optional 3D objects used by **Design it Your Way**.
 
-Each presentation station owns a folder whose name matches its `artworkName` in
-`config/presentations/uniqueness-rewarded.json`.
-
-Example:
+Use the central artwork name as the filename prefix, followed by a differentiating
+number:
 
 ```text
 3d assets/
-  first-light/
-    rose.glb
-    lamp.glb
-    frame-detail.glb
-  blue-room/
-    sculpture.glb
-  rose-archive/
-    vase.glb
+  first-light-1.glb
+  first-light-2.glb
+  first-light-3.glb
+  blue-room-1.glb
+  blue-room-2.glb
+  rose-archive-1.glb
 ```
 
-The Prism Rail presentation treats these as optional objects surrounding the
-central image plane. The current lightweight showcase renders mathematical
-placeholder objects so the page works with zero external assets. A later GLB
-loader can replace those placeholders without changing the station or
-arrangement contracts.
+A station with `artworkName: "first-light"` owns every matching
+`first-light-<number>.glb` asset.
+
+The arrangement system places matching objects inside that station's influence
+sphere, while automatic placement excludes the rectangular presentation viewport
+formed by the artwork and its paper/text. That exclusion is a default generator
+rule only. A future manual editor may deliberately move an object into the
+viewport.
 
 Arrangement modes:
 
-- `random-every-visit`: generate a fresh placement on each load.
-- `seeded-once`: derive repeatable placements from the configured seed so a
-  creator can keep an arrangement and refine it.
+- `random-every-visit`: new mathematical placement on each load.
+- `seeded-once`: deterministic placement from the configured seed so the
+  generated composition can be kept and refined.
+
+The current lightweight canvas uses generated proxy solids when no GLB assets are
+present. The naming and placement contract is ready for a later GLB loader.
