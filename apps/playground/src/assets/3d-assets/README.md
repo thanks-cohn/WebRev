@@ -3,13 +3,13 @@
 Drop GLB/GLTF files here using:
 
 ```text
-<artworkName>-<number>.glb
+<artworkName>-<anything>.glb
 ```
 
-Examples: `first-light-1.glb`, `first-light-2.glb`, `blue-room-1.glb`.
+Examples: `first-light-rose.glb`, `first-light-clock.glb`, `blue-room-sculpture.glb`.
 
 A station whose `artworkName` is `first-light` automatically owns all matching
-`first-light-<number>.*` assets.
+`first-light-<anything>.*` assets.
 
 3D assets are assigned a position inside the station's influence sphere and
 outside the protected image + paper viewport. They may float/spin in place and
@@ -26,11 +26,11 @@ Supported actions:
 ```json
 {
   "assetActions": {
-    "first-light-1.glb": {
+    "first-light-rose.glb": {
       "type": "station",
       "stationId": "blue-room"
     },
-    "first-light-2.glb": {
+    "first-light-clock.glb": {
       "type": "link",
       "linkKey": "world"
     },
