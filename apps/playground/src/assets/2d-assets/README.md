@@ -3,21 +3,21 @@
 Drop image assets here using:
 
 ```text
-<artworkName>-<number>.<ext>
+<artworkName>-<anything>.<ext>
 ```
 
 Examples:
 
 ```text
-first-light-1.png
-first-light-2.webp
-blue-room-1.jpg
+first-light-petals.png
+first-light-memory.webp
+blue-room-orbit.jpg
 ```
 
 Supported extensions: PNG, JPG/JPEG, WEBP, AVIF, SVG.
 
 A station whose `artworkName` is `first-light` automatically owns all matching
-`first-light-<number>.*` images.
+`first-light-<anything>.*` images.
 
 2D assets are billboarded by default: they remain visually facing the viewer
 while occupying a 3D position inside the station's influence sphere.
