@@ -48,9 +48,10 @@ const {
 
   if (canvas instanceof HTMLCanvasElement) {
     const demoCanvas: HTMLCanvasElement = canvas;
-    const ctx = demoCanvas.getContext("2d");
+    const context = demoCanvas.getContext("2d");
 
-    if (ctx) {
+    if (context) {
+      const ctx: CanvasRenderingContext2D = context;
       const radius = 48;
       const gravity = 1550;
       const restitution = 0.82;
