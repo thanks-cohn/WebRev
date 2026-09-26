@@ -1,0 +1,244 @@
+---
+export interface Props {
+  title?: string;
+  description?: string;
+  demoUrl?: string;
+}
+
+const {
+  title = "Squash & Stretch",
+  description = "A tiny graphics demo designed to become a WebRev comparison target for JavaScript and WebAssembly runtimes.",
+  demoUrl
+} = Astro.props;
+---
+<section class="wasm-showcase" data-webrev-id="wasm-showcase.squash-ball">
+  <div class="copy">
+    <div class="eyebrow">WASM SHOWCASE</div>
+    <h2>{title}</h2>
+    <p>{description}</p>
+    <div class="meta">
+      <span>graphics</span>
+      <span>physics</span>
+      <span>agent-inspectable</span>
+    </div>
+  </div>
+
+  <div class="stage" aria-label="Squash and stretch bouncing ball demo">
+    <canvas id="squash-ball-canvas" width="900" height="520"></canvas>
+    <div class="hud">
+      <span id="runtime-label">Runtime: JavaScript fallback</span>
+      {demoUrl && <a href={demoUrl} target="_blank" rel="noreferrer">Open full demo ↗</a>}
+    </div>
+  </div>
+</section>
+
+<script>
+  const canvas = document.getElementById("squash-ball-canvas");
+  const label = document.getElementById("runtime-label");
+
+  if (canvas instanceof HTMLCanvasElement) {
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      let y = 90;
+      let vy = 0;
+      let t = 0;
+
+      const radius = 48;
+      const ground = canvas.height - 64;
+      const gravity = 1500;
+      const restitution = 0.78;
+
+      let previous = performance.now();
+
+      function resizeForDpr() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = Math.max(1, Math.floor(rect.width * dpr));
+        const height = Math.max(1, Math.floor(rect.height * dpr));
+
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { width: rect.width, height: rect.height };
+      }
+
+      function draw(now) {
+        const dt = Math.min((now - previous) / 1000, 1 / 30);
+        previous = now;
+        t += dt;
+
+        const { width, height } = resizeForDpr();
+        const floorY = height - 54;
+
+        vy += gravity * dt;
+        y += vy * dt;
+
+        let impact = 0;
+
+        if (y + radius >= floorY) {
+          y = floorY - radius;
+          impact = Math.min(Math.abs(vy) / 900, 1);
+          vy = -Math.abs(vy) * restitution;
+        }
+
+        const speed = Math.min(Math.abs(vy) / 1000, 1);
+        const nearGround = Math.max(0, 1 - (floorY - (y + radius)) / 90);
+        const squash = Math.max(impact, nearGround * Math.max(vy, 0) / 1100);
+        const stretch = Math.max(0, speed - squash * 0.45);
+
+        const scaleY = 1 + stretch * 0.38 - squash * 0.34;
+        const scaleX = 1 - stretch * 0.18 + squash * 0.42;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const bg = ctx.createRadialGradient(
+          width * 0.5,
+          height * 0.35,
+          20,
+          width * 0.5,
+          height * 0.5,
+          Math.max(width, height) * 0.75
+        );
+        bg.addColorStop(0, "rgba(64,80,120,.18)");
+        bg.addColorStop(1, "rgba(4,6,10,0)");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = "rgba(255,255,255,.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(28, floorY + radius);
+        ctx.lineTo(width - 28, floorY + radius);
+        ctx.stroke();
+
+        const shadowWidth = 110 - Math.min((floorY - y) * 0.16, 58);
+        ctx.save();
+        ctx.translate(width / 2, floorY + radius + 10);
+        ctx.scale(Math.max(shadowWidth / 110, 0.3), 1);
+        const shadow = ctx.createRadialGradient(0, 0, 6, 0, 0, 70);
+        shadow.addColorStop(0, "rgba(0,0,0,.5)");
+        shadow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = shadow;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 70, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(width / 2, y + radius);
+        ctx.scale(scaleX, scaleY);
+
+        const glow = ctx.createRadialGradient(-18, -20, 8, 0, 0, radius * 1.35);
+        glow.addColorStop(0, "#ffffff");
+        glow.addColorStop(0.14, "#d8ecff");
+        glow.addColorStop(0.46, "#77a7ff");
+        glow.addColorStop(1, "#1b2e5f");
+
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        requestAnimationFrame(draw);
+      }
+
+      requestAnimationFrame(draw);
+      label && (label.textContent = "Runtime: JavaScript fallback · WASM slot ready");
+    }
+  }
+</script>
+
+<style>
+  .wasm-showcase {
+    display: grid;
+    grid-template-columns: minmax(220px, .72fr) minmax(0, 1.7fr);
+    gap: 28px;
+    align-items: stretch;
+    margin-top: 42px;
+  }
+
+  .copy,
+  .stage {
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.035);
+    backdrop-filter: blur(16px);
+    border-radius: 28px;
+  }
+
+  .copy {
+    padding: 26px;
+  }
+
+  .eyebrow {
+    font-size: .72rem;
+    letter-spacing: .2em;
+    opacity: .58;
+  }
+
+  h2 {
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    margin: .35em 0 .25em;
+    letter-spacing: -.04em;
+  }
+
+  p {
+    color: #b8bdc7;
+    line-height: 1.65;
+  }
+
+  .meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+  }
+
+  .meta span {
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: .72rem;
+    color: #cdd3dd;
+  }
+
+  .stage {
+    position: relative;
+    min-height: 420px;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 420px;
+  }
+
+  .hud {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: .78rem;
+    color: #aeb6c5;
+  }
+
+  .hud a {
+    color: #fff;
+    text-decoration: none;
+  }
+
+  @media (max-width: 800px) {
+    .wasm-showcase {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
