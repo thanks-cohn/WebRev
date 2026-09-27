@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>REDOWN — Two-Tab Persistent Rough Draft</title>
+<style>
+:root{
+  --bg:#0d1015; --panel:#171c23; --line:#343d4a; --text:#f1f4f7;
+  --muted:#8d98a7; --red:#6f2831; --blue:#183650; --hover:#702931;
+  --shadow:0 18px 55px rgba(0,0,0,.48);
+}
+*{box-sizing:border-box}
+body{margin:0;height:100vh;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.35 Inter,system-ui,Segoe UI,Arial,sans-serif}
+.app{display:grid;grid-template-columns:220px 1fr;height:100vh}
+.sidebar{background:#0a0e13;border-right:1px solid #202630;padding:18px 14px}
+.brand{font-weight:800;letter-spacing:.06em;margin-bottom:22px}
+.nav div{padding:8px 10px;border-radius:8px;color:#818b99;margin:2px 0}
+.nav .active{background:#171c23;color:#fff}
+.main{position:relative;padding:24px 28px}
+h1{margin:0 0 4px;font-size:20px}
+.sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+.explorer{width:min(850px,calc(100vw - 300px));border:1px solid #242c36;border-radius:14px;overflow:hidden;background:#0f141a}
+.head,.file-row{display:grid;grid-template-columns:1fr 130px 100px;align-items:center}
+.head{padding:9px 14px;background:#11171e;border-bottom:1px solid #222a34;color:#788392;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.file-row{min-height:44px;padding:0 14px;background:#12171d;border-bottom:1px solid #1a2028}
+.file-row:hover{background:#1a2028}.file-row.selected{background:#21161a}
+.file-name{display:flex;gap:9px;align-items:center}.ico{width:22px;height:22px;display:grid;place-items:center;border-radius:5px;background:#222936;font-size:10px}
+.folder .ico{background:#282117;color:#efc47c}.meta{color:#6f7a89;font-size:12px}
+.tip{margin-top:14px;color:#65707e;font-size:12px}
+.menu{position:absolute;width:220px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px;z-index:30}
+.menu-title{padding:7px 9px 6px;border-bottom:1px solid #272f39;margin-bottom:4px;color:#a7b0bc;font-size:11px;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-radius:7px}
+.menu-title:hover{background:#252c35;color:#fff}
+.menu-row{display:flex;justify-content:space-between;align-items:center;min-height:36px;padding:8px 10px;border-radius:9px;color:#d4dae2;cursor:pointer}
+.menu-row:hover,.menu-row.active{background:var(--hover);color:#fff}.arrow{color:#7c8795}
+.tabs{position:absolute;width:54px;height:210px;z-index:50}
+.tab{position:absolute;width:38px;height:164px;border-radius:10px;border:1px solid var(--line);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s ease}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.1em;font-size:9px;text-transform:uppercase;color:#eef1f4;white-space:nowrap}
+.tab.permanent{background:var(--red)}
+.tab.recent{background:var(--blue)}
+.tab.front{left:0;top:0;z-index:5}
+.tab.back{left:8px;top:18px;z-index:2}
+.context-label{position:absolute;padding:6px 8px;border:1px solid #252d37;border-radius:9px;background:#10151b;color:#798492;font-size:11px;z-index:20}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">REDOWN / EXPLORE</div>
+  <div class="nav"><div class="active">Explore</div><div>Recent</div><div>Destinations</div><div>Settings</div></div>
+</aside>
+<main class="main" id="main">
+  <h1>Explore</h1>
+  <div class="sub">Two-tab persistent context-menu experiment.</div>
+  <div class="explorer">
+    <div class="head"><div>Name</div><div>Type</div><div>Size</div></div>
+    <div class="file-row folder" data-name="Projects"><div class="file-name"><span class="ico">▰</span>Projects</div><div class="meta">Folder</div><div class="meta">—</div></div>
+    <div class="file-row folder" data-name="Media"><div class="file-name"><span class="ico">▰</span>Media</div><div class="meta">Folder</div><div class="meta">—</div></div>
+    <div class="file-row" data-name="build-v3.zip"><div class="file-name"><span class="ico">ZIP</span>build-v3.zip</div><div class="meta">Archive</div><div class="meta">48 MB</div></div>
+    <div class="file-row" data-name="poster-final.png"><div class="file-name"><span class="ico">IMG</span>poster-final.png</div><div class="meta">Image</div><div class="meta">5.1 MB</div></div>
+  </div>
+  <div class="tip">
+    Drill down to <b>images</b>. The blue tab becomes IMAGES and sits in front.
+    Click REDOWN to fold everything: REDOWN comes to front and IMAGES stays tucked behind.
+    Click elsewhere to dismiss. Right-click again: both tabs return, with REDOWN in front.
+    Click IMAGES to restore the saved arrangement.
+  </div>
+</main>
+</div>
+<script>
+const main=document.getElementById('main');
+const rows=[...document.querySelectorAll('.file-row')];
+let ctx=null;
+let menuNodes=[];
+let currentPath=[];
+let currentLevel='File Actions';
+let savedArrangement=null;
+let folded=false;
+const tree={
+  label:'File Actions',
+  items:[
+    {id:'open',label:'Open'},
+    {id:'move',label:'Move to…',children:{
+      label:'Cloudflare Account',
+      items:[
+        {id:'redown',label:'REDOWN-ASSETS',children:{
+          label:'REDOWN-ASSETS',
+          items:[
+            {id:'images',label:'images',children:{
+              label:'images',
+              items:[{id:'finals',label:'finals'},{id:'drafts',label:'drafts'}]
+            }},
+            {id:'builds',label:'builds'},
+            {id:'docs',label:'docs'}
+          ]
+        }},
+        {id:'mono',label:'MoNØMeDIA',children:{
+          label:'MoNØMeDIA',
+          items:[{id:'brand',label:'brand'},{id:'mascots',label:'mascots'},{id:'intros',label:'intros'}]
+        }},
+        {id:'archive',label:'ARCHIVE'}
+      ]
+    }},
+    {id:'reorg',label:'Reorganize…'},
+    {id:'rename',label:'Rename'},
+    {id:'delete',label:'Delete'}
+  ]
+};
+function snapshot(){
+  if(!ctx) return null;
+  return {fileName:ctx.fileName,x:ctx.x,y:ctx.y,path:[...currentPath],level:currentLevel};
+}
+function removeMenus(){
+  document.querySelectorAll('.menu,.context-label').forEach(n=>n.remove());
+  menuNodes=[];
+}
+function removeTabs(){
+  const t=document.querySelector('.tabs');
+  if(t) t.remove();
+}
+function dismissVisual(){
+  removeMenus();
+  removeTabs();
+  rows.forEach(r=>r.classList.remove('selected'));
+}
+function createMenu(node,depth,x,y){
+  const el=document.createElement('div');
+  el.className='menu';
+  el.style.left=x+'px'; el.style.top=y+'px';
+  const title=document.createElement('div');
+  title.className='menu-title';
+  title.textContent=node.label;
+  title.onclick=e=>{
+    e.stopPropagation();
+    while(menuNodes.length>depth+1){menuNodes.pop().remove();currentPath.pop();}
+    currentLevel=node.label;
+    savedArrangement=snapshot();
+    folded=false;
+    renderTabs(false);
+  };
+  el.appendChild(title);
+  node.items.forEach(item=>{
+    const row=document.createElement('div');
+    row.className='menu-row';
+    row.dataset.id=item.id;
+    row.innerHTML='<span>'+item.label+'</span><span class="arrow">'+(item.children?'›':'')+'</span>';
+    row.onclick=e=>{
+      e.stopPropagation();
+      if(!item.children) return;
+      while(menuNodes.length>depth+1){menuNodes.pop().remove();currentPath.pop();}
+      el.querySelectorAll('.menu-row').forEach(r=>r.classList.remove('active'));
+      row.classList.add('active');
+      currentPath[depth]=item.id;
+      currentLevel=item.children.label;
+      const dir=depth%2===0?1:-1;
+      const nx=dir===1?x+232:x-232;
+      const ny=y+34;
+      const child=createMenu(item.children,depth+1,nx,ny);
+      menuNodes.push(child);
+      savedArrangement=snapshot();
+      folded=false;
+      renderTabs(false);
+    };
+    el.appendChild(row);
+  });
+  main.appendChild(el);
+  return el;
+}
+function renderArrangement(arr){
+  removeMenus();
+  ctx={fileName:arr.fileName,x:arr.x,y:arr.y};
+  currentPath=[];
+  currentLevel=arr.level;
+  const label=document.createElement('div');
+  label.className='context-label';
+  label.style.left=ctx.x+'px';
+  label.style.top=(ctx.y-34)+'px';
+  label.textContent='Selected: '+ctx.fileName;
+  main.appendChild(label);
+  let node=tree;
+  let x=ctx.x,y=ctx.y;
+  const root=createMenu(node,0,x,y);
+  menuNodes=[root];
+  arr.path.forEach((itemId,depth)=>{
+    const item=node.items.find(i=>i.id===itemId);
+    if(!item || !item.children) return;
+    const menu=menuNodes[depth];
+    const row=menu.querySelector('[data-id="'+itemId+'"]');
+    if(row) row.classList.add('active');
+    currentPath[depth]=itemId;
+    const dir=depth%2===0?1:-1;
+    x=dir===1?x+232:x-232;
+    y+=34;
+    node=item.children;
+    const child=createMenu(node,depth+1,x,y);
+    menuNodes.push(child);
+  });
+  folded=false;
+  renderTabs(false);
+}
+function renderTabs(permanentFront){
+  if(!ctx) return;
+  removeTabs();
+  const tabs=document.createElement('div');
+  tabs.className='tabs';
+  tabs.style.left=(ctx.x-52)+'px';
+  tabs.style.top=ctx.y+'px';
+  const permanent=document.createElement('div');
+  permanent.className='tab permanent '+(permanentFront?'front':'back');
+  permanent.innerHTML='<span>REDOWN</span>';
+  permanent.onclick=e=>{
+    e.stopPropagation();
+    if(!folded){
+      const snap=snapshot();
+      if(snap) savedArrangement=snap;
+      removeMenus();
+      folded=true;
+      renderTabs(true);
+    }
+  };
+  const recent=document.createElement('div');
+  recent.className='tab recent '+(permanentFront?'back':'front');
+  recent.innerHTML='<span>'+(savedArrangement?.level || currentLevel || 'RECENT')+'</span>';
+  recent.onclick=e=>{
+    e.stopPropagation();
+    if(savedArrangement) renderArrangement(savedArrangement);
+  };
+  tabs.appendChild(permanent);
+  tabs.appendChild(recent);
+  main.appendChild(tabs);
+}
+function openFreshContext(row,x,y){
+  dismissVisual();
+  rows.forEach(r=>r.classList.remove('selected'));
+  row.classList.add('selected');
+  ctx={fileName:row.dataset.name,x,y};
+  currentPath=[];
+  currentLevel='File Actions';
+  const label=document.createElement('div');
+  label.className='context-label';
+  label.style.left=x+'px';
+  label.style.top=(y-34)+'px';
+  label.textContent='Selected: '+ctx.fileName;
+  main.appendChild(label);
+  const root=createMenu(tree,0,x,y);
+  menuNodes=[root];
+  folded=true;
+  renderTabs(true);
+}
+rows.forEach(row=>{
+  row.oncontextmenu=e=>{
+    e.preventDefault();
+    const mr=main.getBoundingClientRect();
+    const x=Math.max(90,Math.min(e.clientX-mr.left,mr.width-320));
+    const y=Math.max(70,Math.min(e.clientY-mr.top,mr.height-300));
+    openFreshContext(row,x,y);
+  };
+});
+main.onclick=e=>{
+  if(!e.target.closest('.menu')&&!e.target.closest('.tabs')&&!e.target.closest('.file-row')){
+    dismissVisual();
+  }
+};
+</script>
+</body>
+</html>
